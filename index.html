@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>HIDROTEKA | Materiales para Piscina</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header>
+        <h1>HIDROTEKA</h1>
+        <nav>
+            <a href="#inicio">Inicio</a>
+            <a href="#productos">Productos</a>
+            <a href="#contacto">Contacto</a>
+        </nav>
+    </header>
+
+    <section id="inicio">
+        <h2>Bienvenido a HIDROTEKA</h2>
+        <p>Tu tienda de confianza en materiales y productos para piscinas. Calidad, confianza y el mejor precio.</p>
+    </section>
+
+    <section id="productos" class="productos">
+        <h2>Productos</h2>
+        <div class="producto">
+            <h3>BOMBA PARA PISCINA VULCANO 2HP 220V</h3>
+            <p>Precio: $179.736</p>
+            <p>Marca: VULCANO</p>
+            <button onclick="agregarAlCarrito('BOMBA PARA PISCINA VULCANO 2HP 220V', 179736)">Agregar al carrito</button>
+        </div>
+        <div class="producto">
+            <h3>TABLETA TRIPLE ACCION</h3>
+            <p>Precio: $5.861</p>
+            <p>Marca: VULCANO</p>
+            <button onclick="agregarAlCarrito('TABLETA TRIPLE ACCION', 5861)">Agregar al carrito</button>
+        </div>
+        <div class="producto">
+            <h3>SUBE PH (POLVO AUMENTA PH) POTE 1 KILO</h3>
+            <p>Precio: $1.790</p>
+            <p>Marca: VULCANO</p>
+            <button onclick="agregarAlCarrito('SUBE PH', 1790)">Agregar al carrito</button>
+        </div>
+    </section>
+
+    <section id="carrito">
+        <h2>Carrito de Compras</h2>
+        <ul id="lista-carrito"></ul>
+        <p>Total: $<span id="total">0</span></p>
+        <button onclick="pagar()">Finalizar Compra</button>
+    </section>
+
+    <section id="contacto">
+        <h2>Contacto</h2>
+        <p>¿Tienes dudas? Escríbenos directamente por WhatsApp.</p>
+        <a href="https://wa.me/56912345678" target="_blank" class="whatsapp-btn">📱 Enviar mensaje</a>
+    </section>
+
+    <footer>
+        <p>© 2025 HIDROTEKA. Todos los derechos reservados.</p>
+    </footer>
+
+    <script src="product.js"></script>
+</body>
+</html>
