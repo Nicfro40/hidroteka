@@ -21,5 +21,12 @@ function actualizarCarrito() {
 }
 
 function pagar() {
+    if (carrito.length === 0) {
+        alert('No hay productos en el carrito.');
+        return;
+    }
+
     alert('¡Gracias por tu compra! Te contactaremos por WhatsApp o correo para coordinar el pago.');
+    carrito = [];
+    actualizarCarrito();
 }
