@@ -105,8 +105,9 @@ input.fader { height: 100%; }
 .xf-label { font-weight: 800; font-size: .85rem; }
 .xf-a { color: #22d3ee; } .xf-b { color: #fb7185; }
 
-/* ---- Biblioteca ---- */
-.library { margin: 0 12px 24px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px; }
+/* ---- Biblioteca y Spotify ---- */
+.bottom { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 0 12px 24px; align-items: start; }
+.library, .spotify { min-width: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px; }
 .lib-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .lib-head h2 { margin: 0; font-size: 1rem; letter-spacing: .08em; }
 .lib-status { color: var(--muted); font-size: .85rem; flex: 1; }
@@ -144,6 +145,7 @@ dialog p { color: var(--muted); font-size: .85rem; }
 
 @media (max-width: 1100px) {
   .console { grid-template-columns: 1fr; }
+  .bottom { grid-template-columns: 1fr; }
   .mixer { order: 3; }
   .strips { grid-template-columns: 1fr 1fr; }
   .strip-lower { height: 140px; }
@@ -156,3 +158,43 @@ dialog p { color: var(--muted); font-size: .85rem; }
   .deck-body { grid-template-columns: 1fr 44px; }
   .loops { grid-template-columns: repeat(3, 1fr); }
 }
+
+/* ---- Spotify ---- */
+.sp-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.sp-head h2 { margin: 0; font-size: 1rem; letter-spacing: .08em; display: flex; align-items: center; gap: 8px; }
+.sp-dot { width: 14px; height: 14px; border-radius: 50%; background: #1db954; box-shadow: 0 0 8px rgba(29,185,84,.6); }
+.sp-status { color: var(--muted); font-size: .85rem; flex: 1; }
+.sp-actions { display: flex; gap: 8px; }
+.spotify .btn.primary { background: #1db954; border-color: #1db954; }
+.sp-body { margin-top: 10px; }
+.sp-msg { color: var(--muted); font-size: .88rem; margin: 8px 0; line-height: 1.5; }
+.sp-code { background: #0a0c11; border: 1px solid var(--line); border-radius: 8px; padding: 10px; font-size: .85rem; overflow: auto; }
+.sp-toolbar { display: flex; gap: 8px; flex-wrap: wrap; }
+.sp-search, .sp-playlists, .sp-client { background: #0a0c11; color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: .9rem; }
+.sp-search { flex: 2; min-width: 180px; }
+.sp-playlists { flex: 1; min-width: 160px; }
+.sp-search:focus, .sp-playlists:focus, .sp-client:focus { outline: none; border-color: #1db954; }
+.sp-summary { color: var(--muted); font-size: .85rem; margin: 10px 0 8px; }
+.sp-wrap { max-height: 320px; }
+.sp-name { display: flex; align-items: center; gap: 8px; }
+.sp-name span { overflow: hidden; text-overflow: ellipsis; }
+.sp-thumb { width: 28px; height: 28px; border-radius: 4px; background: #262b3a; flex: none; object-fit: cover; display: inline-block; }
+.sp-artist { color: var(--muted); max-width: 0; width: 30%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sp-have { color: #1db954; font-weight: 800; margin-right: 4px; }
+.sp-miss { color: var(--muted); }
+.sp-play { color: #1db954 !important; }
+.sp-player { display: flex; align-items: center; gap: 12px; margin-top: 12px; padding: 10px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; }
+.sp-cover { width: 48px; height: 48px; border-radius: 6px; background: #262b3a; object-fit: cover; flex: none; }
+.sp-np { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.sp-np-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sp-np-sub { color: var(--muted); font-size: .72rem; }
+.sp-seek { width: 100%; accent-color: #1db954; margin: 0; }
+.sp-toggle { width: 44px; height: 44px; padding: 0; font-size: 1.1rem; }
+.sp-vol { width: 80px; accent-color: #1db954; }
+.sp-dialog { max-width: 560px; }
+.sp-steps { padding-left: 20px; line-height: 1.6; font-size: .9rem; }
+.sp-steps code { background: #0a0c11; border: 1px solid var(--line); border-radius: 5px; padding: 2px 6px; font-size: .82rem; word-break: break-all; }
+.sp-steps .btn { padding: 2px 8px; font-size: .75rem; }
+.sp-client { width: 100%; font-family: ui-monospace, Menlo, monospace; margin: 4px 0 10px; }
+.sp-note { color: var(--muted); font-size: .8rem; margin: 0 0 14px; }
+.sp-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }

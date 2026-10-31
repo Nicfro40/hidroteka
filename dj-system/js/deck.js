@@ -36,6 +36,7 @@ class Deck {
     this.onLoadRequest = opts.onLoadRequest || (() => {});
     this.onBpmEdit = opts.onBpmEdit || (() => {});
     this.onNotice = opts.onNotice || (() => {});
+    this.onPlay = opts.onPlay || (() => {});
     this.getOther = opts.getOther || (() => null);
     this.PPS = 100;
     this.ZOOM_SECONDS = 8;
@@ -165,6 +166,7 @@ class Deck {
     this._startSource(this.pausedPos);
     this.playing = true;
     this._renderTransport();
+    this.onPlay(this);
   }
   pause() {
     if (!this.playing) return;

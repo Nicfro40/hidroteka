@@ -17,14 +17,16 @@
     keyHint: 'Q play · W cue · E sync · R loop · 1-4 hot cues',
     onLoadRequest: handleLoadRequest,
     onBpmEdit: (track, bpm) => Library.updateBpm(track, bpm),
-    onNotice: toast
+    onNotice: toast,
+    onPlay: () => SpotifyLink.pause()
   });
   const deckB = new Deck('B', $('#deck-b'), {
     color: '#fb7185',
     keyHint: 'P play · O cue · I sync · U loop · 7-0 hot cues',
     onLoadRequest: handleLoadRequest,
     onBpmEdit: (track, bpm) => Library.updateBpm(track, bpm),
-    onNotice: toast
+    onNotice: toast,
+    onPlay: () => SpotifyLink.pause()
   });
   deckA.getOther = () => deckB;
   deckB.getOther = () => deckA;
@@ -59,11 +61,20 @@
   Library.on('load', (track, deckId) => loadTrack(track, deckId));
   Library.on('change', rec => {
     for (const d of [deckA, deckB]) if (d.track && d.track.id === rec.id) d.setBpm(rec.bpm, rec.firstBeat);
+    SpotifyLink.refreshMatches();
   });
-  Library.init({ tbody: $('#lib-body'), status: $('#lib-status') });
+  Library.init({ tbody: $('#lib-body'), status: $('#lib-status') }).then(() => SpotifyLink.refreshMatches());
+
+  /* ---- Spotify ---- */
+  SpotifyLink.build($('#spotify'), {
+    toast,
+    locals: () => Library.tracks,
+    loadLocal: (id, deckId) => loadTrack(Library.get(id), deckId),
+    onSpotifyPlaying: () => { deckA.pause(); deckB.pause(); }
+  });
 
   const fileInput = $('#file-input');
-  fileInput.addEventListener('change', () => { Library.addFiles(fileInput.files); fileInput.value = ''; });
+  fileInput.addEventListener('change', () => { Library.addFiles(fileInput.files); fileInput.value = ''; SpotifyLink.refreshMatches(); });
   const dz = $('#dropzone');
   dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('over'); });
   dz.addEventListener('dragleave', () => dz.classList.remove('over'));
@@ -195,5 +206,5 @@
   }
   requestAnimationFrame(frame);
 
-  window.MixDeck = { deckA, deckB, Library, Engine, Mixer };
+  window.MixDeck = { deckA, deckB, Library, Engine, Mixer, SpotifyLink };
 })();

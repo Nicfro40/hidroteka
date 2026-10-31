@@ -27,6 +27,37 @@ El audio se activa con el primer clic en la página (política de autoplay de lo
 - **Biblioteca** con arrastrar y soltar. Las pistas quedan guardadas en IndexedDB, así que siguen ahí al recargar.
 - **Atajos de teclado** para todo el transporte (botón "? Atajos" o tecla `?`).
 
+## Conexión con Spotify
+
+La app se conecta a tu cuenta de Spotify con OAuth PKCE, sin servidor propio. Con eso puedes:
+
+- Buscar en el catálogo de Spotify e importar tus playlists como setlists.
+- Ver qué pistas de una playlist ya tienes como archivo en la biblioteca local y cargarlas al deck A o B con un clic.
+- Escuchar la pista completa con el reproductor integrado (Web Playback SDK, requiere Spotify Premium).
+
+### Lo que Spotify no permite
+
+Los términos para desarrolladores de Spotify prohíben mezclar, hacer segue u overlap de su contenido con otro audio,
+y el reproductor web entrega el sonido cifrado (DRM). Por eso el audio de Spotify **no pasa por el mixer**: no se le
+puede aplicar EQ, pitch, loops ni efectos, y la app pausa Spotify cuando arranca un deck (y viceversa). Además,
+desde noviembre de 2024 las apps nuevas no reciben BPM (`audio-features`) ni previews de 30 segundos. Para mezclar
+necesitas los archivos de audio; Spotify sirve para preparar el set.
+
+### Configuración (una sola vez)
+
+1. Spotify exige abrir la app desde `http://127.0.0.1` o `https`, no desde un archivo local. En esta carpeta:
+
+   ```bash
+   python3 -m http.server 8080 --bind 127.0.0.1
+   ```
+
+   y abre `http://127.0.0.1:8080/`. (También sirve publicarla en GitHub Pages u otro hosting https.)
+2. Entra a `developer.spotify.com/dashboard`, crea una app y en **Redirect URIs** agrega exactamente la URL que muestra
+   el botón ⚙ de la sección Spotify (por ejemplo `http://127.0.0.1:8080/index.html`). Marca **Web API** y
+   **Web Playback SDK**.
+3. Copia el **Client ID** en el diálogo ⚙ y pulsa "Conectar con Spotify".
+4. Mientras la app de Spotify esté en modo desarrollo, agrega en **User Management** las cuentas que podrán entrar (hasta 25).
+
 ## Estructura
 
 ```
@@ -40,6 +71,7 @@ dj-system/
     ├── library.js  Biblioteca, decodificación, IndexedDB
     ├── deck.js     Reproducción, cue, loops, pitch, sync, FX, dibujo
     ├── mixer.js    Strips de canal, medidores, crossfader
+    ├── spotify.js  OAuth PKCE, búsqueda, playlists, cruce con biblioteca, reproductor
     └── app.js      Wiring, teclado, grabación, ayuda
 ```
 
@@ -49,6 +81,7 @@ dj-system/
 - Los formatos soportados dependen del navegador (MP3, WAV, OGG y AAC funcionan en todos; FLAC no en Safari).
 - La detección de BPM funciona bien en música con pulso marcado; en material sin bajo claro conviene corregir a mano.
 - No hay cuenta de usuario ni sincronización entre dispositivos: todo vive en el navegador local.
+- Spotify solo sirve para buscar, armar setlists y escuchar; su audio no se puede mezclar (ver arriba).
 
 ## Siguientes pasos sugeridos
 
