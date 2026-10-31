@@ -46,10 +46,27 @@ Cada pista que importas se analiza sola, en segundo plano, y el resultado queda 
 - **Mixer**: trim, EQ de tres bandas, medidores de nivel por canal, faders y crossfader con curva suave.
 - **Efectos por deck**: filtro barrido (pasa bajos / pasa altos), eco sincronizado al tempo y reverb.
 - **Grabación de la mezcla** desde el bus master, con descarga en WebM/Opus (u OGG/M4A según el navegador).
-- **Navegador** con árbol lateral (Colección, Automix, Spotify), columnas ordenables, búsqueda, carátulas y doble clic para cargar en el deck libre. Las pistas quedan guardadas en IndexedDB.
+- **Navegador** con árbol lateral (Colección, Automix, Spotify, Fuentes), columnas ordenables, búsqueda, carátulas y doble clic para cargar en el deck libre. Las pistas quedan guardadas en IndexedDB.
+- **Pendrive y carpetas vinculadas**: la app recuerda la carpeta, la relee al iniciar y detecta pistas nuevas o faltantes (ver abajo).
 - **Atajos de teclado** para todo el transporte (botón "? Atajos" o tecla `?`).
 - **Automix**: arma una cola y la app mezcla sola (ver sección siguiente).
 - **Spotify**: búsqueda, playlists como setlists, cruce con la biblioteca local y reproductor (ver más abajo).
+
+## Pendrive y carpetas vinculadas
+
+En el navegador, bajo **Fuentes**, el botón **Vincular carpeta o pendrive** abre el selector de carpetas del sistema.
+A partir de ahí:
+
+- La app **recuerda la carpeta** y la vuelve a leer cada vez que la abres: las canciones ya están en la colección al iniciar.
+- Las pistas **no se copian**: se leen desde la carpeta cuando se cargan en un deck, igual que un CDJ lee el pendrive.
+  El análisis (BPM, tonalidad, ondas, estructura) sí queda guardado, así que la segunda vez todo carga al instante.
+- Las canciones **nuevas** se detectan y analizan solas; las que ya no están se marcan con ⊘ y se atenúan hasta que
+  vuelvas a conectar el pendrive. El punto verde, amarillo o rojo junto a cada fuente indica si está conectada, si
+  necesita que toques para dar permiso, o si no está.
+- ↻ vuelve a leer la carpeta y × la desvincula (los archivos no se tocan).
+
+Esto usa la API de acceso a archivos del navegador, disponible en **Chrome y Edge de escritorio**. En otros navegadores
+(Firefox, Safari, móviles) el botón pasa a ser **Importar carpeta**, que copia las pistas a la colección de una vez.
 
 ## Automix: la música se mezcla sola
 
@@ -109,7 +126,8 @@ dj-system/
     ├── knob.js     Perilla rotatoria reutilizable
     ├── analyzer.js Análisis: BPM, grilla, tonalidad, bandas, ganancia, energía, estructura
     ├── tags.js     Lectura de etiquetas ID3v2
-    ├── library.js  Biblioteca, decodificación, IndexedDB
+    ├── library.js  Colección, decodificación, IndexedDB
+    ├── sources.js  Carpetas y pendrives vinculados (File System Access API)
     ├── deck.js     Reproducción, cue, loops, pitch, sync, FX, dibujo
     ├── mixer.js    Strips de canal, medidores, crossfader
     ├── spotify.js  OAuth PKCE, búsqueda, playlists, cruce con biblioteca, reproductor

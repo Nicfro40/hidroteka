@@ -311,3 +311,26 @@ dialog p { color: var(--muted); font-size: .84rem; line-height: 1.5; }
 .ui-input { width: 100%; background: #0d0f14; color: var(--text); border: 1px solid var(--line-2); border-radius: 4px; padding: 8px 10px; font-family: var(--mono); font-size: 1rem; margin-bottom: 14px; }
 .ui-input:focus { outline: none; border-color: var(--accent); }
 .ui-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* ---------- Fuentes (carpetas y pendrives) ---------- */
+.tree-sources { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 2px; }
+.src-item { display: grid; grid-template-columns: 1fr 22px 22px; align-items: center; gap: 2px; border-radius: 4px; }
+.src-item.active { background: color-mix(in srgb, var(--accent) 18%, transparent); box-shadow: inset 2px 0 0 var(--accent); }
+.src-item:hover { background: var(--panel-2); }
+.src-main { display: grid; grid-template-columns: 10px 14px 1fr; align-items: center; gap: 6px; background: none; border: 0; color: var(--text); text-align: left; padding: 6px 6px 6px 10px; cursor: pointer; font-size: .84rem; min-width: 0; }
+.src-main em { grid-column: 2 / -1; font-style: normal; font-size: .68rem; color: var(--muted); font-family: var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.src-icon { color: var(--muted); font-size: .8rem; }
+.src-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+.src-dot { width: 8px; height: 8px; border-radius: 50%; background: #3a3f4d; display: inline-block; }
+.src-dot.ok { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+.src-dot.busy { background: var(--warn); animation: pulse 1s infinite; }
+.src-dot.warn { background: var(--warn); }
+.src-dot.off { background: var(--rec); }
+.src-prompt .src-main, .src-missing .src-main { color: var(--muted); }
+.src-btn { background: none; border: 0; color: var(--muted); cursor: pointer; padding: 4px 0; border-radius: 3px; font-size: .8rem; }
+.src-btn:hover { color: var(--text); background: #2c303b; }
+.src-link { color: var(--muted); }
+.src-note { color: var(--muted); font-size: .68rem; padding: 2px 10px; line-height: 1.4; }
+.t-src { color: var(--muted); font-size: .7rem; margin-right: 6px; }
+.row-missing td { opacity: .45; }
+.row-missing .t-src { color: var(--rec); opacity: 1; }

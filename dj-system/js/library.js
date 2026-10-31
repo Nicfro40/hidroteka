@@ -3,6 +3,8 @@
 const Library = (() => {
   const DB_NAME = 'mixdeck';
   const STORE = 'tracks';
+  const SOURCES = 'sources';
+  const DB_VERSION = 2;
   const MAX_DECODED = 8;
 
   let db = null;
@@ -14,7 +16,7 @@ const Library = (() => {
   const queue = [];
   let analyzing = false, analyzingNow = null, stageNow = '';
   let addSeq = 0;
-  let sortKey = 'added', sortDir = 1, filter = '';
+  let sortKey = 'added', sortDir = 1, filter = '', sourceFilter = null;
   const hooks = { masterCamelot: () => null };
 
   const uid = () => (crypto.randomUUID ? crypto.randomUUID()
@@ -25,18 +27,22 @@ const Library = (() => {
     return new Promise(resolve => {
       if (!window.indexedDB) return resolve(null);
       let req;
-      try { req = indexedDB.open(DB_NAME, 1); } catch (e) { return resolve(null); }
-      req.onupgradeneeded = () => req.result.createObjectStore(STORE, { keyPath: 'id' });
+      try { req = indexedDB.open(DB_NAME, DB_VERSION); } catch (e) { return resolve(null); }
+      req.onupgradeneeded = () => {
+        const d = req.result;
+        if (!d.objectStoreNames.contains(STORE)) d.createObjectStore(STORE, { keyPath: 'id' });
+        if (!d.objectStoreNames.contains(SOURCES)) d.createObjectStore(SOURCES, { keyPath: 'id' });
+      };
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => resolve(null);
     });
   }
-  function tx(mode, fn) {
+  function tx(mode, fn, store) {
     return new Promise(resolve => {
       if (!db) return resolve(null);
       let t;
-      try { t = db.transaction(STORE, mode); } catch (e) { return resolve(null); }
-      const req = fn(t.objectStore(STORE));
+      try { t = db.transaction(store || STORE, mode); } catch (e) { return resolve(null); }
+      const req = fn(t.objectStore(store || STORE));
       t.oncomplete = () => resolve(req ? req.result : null);
       t.onerror = () => resolve(null);
       t.onabort = () => resolve(null);
@@ -46,12 +52,16 @@ const Library = (() => {
     id: t.id, name: t.name, artist: t.artist, album: t.album, cover: t.cover, blob: t.blob, added: t.added,
     duration: t.duration, bpm: t.bpm, firstBeat: t.firstBeat, key: t.key, camelot: t.camelot,
     gainDb: t.gainDb, energy: t.energy, audioStart: t.audioStart, audioEnd: t.audioEnd,
-    bands: t.bands, cues: t.cues, analysisVersion: t.analysisVersion, error: !!t.error
+    bands: t.bands, cues: t.cues, analysisVersion: t.analysisVersion, error: !!t.error,
+    source: t.source || null, missing: !!t.missing
   });
   const dbPut = t => tx('readwrite', s => s.put(toRecord(t)));
   const dbDelete = id => tx('readwrite', s => s.delete(id));
   const dbClear = () => tx('readwrite', s => s.clear());
   const dbAll = () => tx('readonly', s => s.getAll()).then(r => r || []);
+  const listSources = () => tx('readonly', s => s.getAll(), SOURCES).then(r => (r || []).sort((a, b) => (a.added || 0) - (b.added || 0)));
+  const putSource = src => tx('readwrite', s => s.put(src), SOURCES);
+  const deleteSource = id => tx('readwrite', s => s.delete(id), SOURCES);
 
   /* ---- API ---- */
   async function init(opts) {
@@ -122,8 +132,8 @@ const Library = (() => {
         });
         if (!rec.bpm && rec.tagBpm) rec.bpm = rec.tagBpm;
       } catch (e) {
-        console.warn('No se pudo analizar', rec.name, e);
-        rec.error = true;
+        if (e && e.friendly) { rec.missing = true; }
+        else { console.warn('No se pudo analizar', rec.name, e); rec.error = true; }
       }
       rec.analyzing = false;
       analyzingNow = null;
@@ -135,14 +145,74 @@ const Library = (() => {
     render();
   }
 
+  async function fileOf(rec) {
+    if (rec.blob) return rec.blob;
+    if (rec.source) return Sources.getFile(rec.source);
+    const e = new Error('La pista no tiene archivo asociado.'); e.friendly = true; throw e;
+  }
   async function decode(rec) {
     if (decoded.has(rec.id)) return decoded.get(rec.id);
-    const ab = await rec.blob.arrayBuffer();
+    const file = await fileOf(rec);
+    const ab = await file.arrayBuffer();
     const buf = await Engine.ctx.decodeAudioData(ab);
     if (decoded.size >= MAX_DECODED) decoded.delete(decoded.keys().next().value);
     decoded.set(rec.id, buf);
     return buf;
   }
+
+  /* Sincroniza la colección con el contenido actual de una carpeta vinculada. */
+  async function syncSource(sourceId, sourceName, files) {
+    const byPath = new Map();
+    for (const t of tracks) if (t.source && t.source.id === sourceId) byPath.set(t.source.path, t);
+    let added = 0;
+    const seen = new Set();
+    for (const { path, file } of files) {
+      seen.add(path);
+      const prev = byPath.get(path);
+      if (prev) {
+        const changed = prev.source.size !== file.size || prev.source.mtime !== file.lastModified;
+        prev.missing = false;
+        if (changed) {
+          prev.source.size = file.size; prev.source.mtime = file.lastModified;
+          decoded.delete(prev.id);
+          Tags.read(file).then(tags => { prev.name = tags.title || prev.name; prev.artist = tags.artist || prev.artist; prev.cover = tags.cover || prev.cover; render(); });
+          enqueue(prev);
+        } else if (!prev.error && prev.analysisVersion !== Analyzer.VERSION && !prev.analyzing) enqueue(prev);
+        continue;
+      }
+      const rec = {
+        id: uid(), name: file.name.replace(/\.[^.]+$/, ''), artist: '', album: '', cover: null, blob: null,
+        source: { id: sourceId, path, size: file.size, mtime: file.lastModified },
+        duration: 0, bpm: null, firstBeat: 0, key: null, camelot: null, gainDb: 0, energy: null,
+        audioStart: 0, audioEnd: 0, bands: null, cues: null, analysisVersion: 0, missing: false,
+        added: Date.now() * 1000 + (addSeq++ % 1000), analyzing: true
+      };
+      tracks.push(rec);
+      added++;
+      Tags.read(file).then(tags => {
+        rec.name = tags.title || rec.name; rec.artist = tags.artist || ''; rec.album = tags.album || '';
+        rec.cover = tags.cover || null; rec.tagBpm = tags.bpm;
+        dbPut(rec); render();
+      });
+      enqueue(rec);
+    }
+    let missing = 0;
+    for (const [path, t] of byPath) if (!seen.has(path)) { t.missing = true; missing++; }
+    for (const t of tracks) if (t.source && t.source.id === sourceId) await dbPut(t);
+    render();
+    return { added, missing, total: files.length };
+  }
+  function countBySource(id) { return tracks.filter(t => t.source && t.source.id === id).length; }
+  async function removeBySource(id) {
+    for (const t of tracks.filter(t => t.source && t.source.id === id)) {
+      const i = tracks.indexOf(t);
+      tracks.splice(i, 1);
+      decoded.delete(t.id);
+      await dbDelete(t.id);
+    }
+    render();
+  }
+  function setSourceFilter(id) { sourceFilter = id; render(); }
 
   async function updateBpm(rec, bpm, firstBeat) {
     rec.bpm = bpm;
@@ -186,6 +256,7 @@ const Library = (() => {
   function visibleTracks() {
     const q = filter.trim().toLowerCase();
     let list = q ? tracks.filter(t => (t.name + ' ' + (t.artist || '') + ' ' + (t.album || '')).toLowerCase().includes(q)) : tracks.slice();
+    if (sourceFilter) list = list.filter(t => t.source && t.source.id === sourceFilter);
     const cmp = {
       added: (a, b) => a.added - b.added,
       name: (a, b) => a.name.localeCompare(b.name),
@@ -216,9 +287,10 @@ const Library = (() => {
     tbody.innerHTML = visibleTracks().map(t => {
       const cover = coverUrl(t);
       const bpm = t.analyzing ? '<span class="analyzing">…</span>' : t.error ? '<span class="err">error</span>' : t.bpm ? fmtBpm(t.bpm) : '—';
-      return '<tr data-id="' + t.id + '" draggable="true" class="' + (t.error ? 'row-err' : '') + (t.analyzing ? ' row-analyzing' : '') + '">' +
+      const src = t.source ? '<span class="t-src" title="' + esc(Sources.nameOf(t.source.id)) + ' · ' + esc(t.source.path) + '">' + (t.missing ? '⊘' : '▮') + '</span>' : '';
+      return '<tr data-id="' + t.id + '" draggable="true" class="' + (t.error ? 'row-err' : '') + (t.analyzing ? ' row-analyzing' : '') + (t.missing ? ' row-missing' : '') + '">' +
         '<td class="t-art">' + (cover ? '<img src="' + cover + '" alt="" loading="lazy">' : '<span class="art-empty"></span>') + '</td>' +
-        '<td class="t-name"><div class="t-title" title="' + esc(t.name) + '">' + esc(t.name) + '</div></td>' +
+        '<td class="t-name"><div class="t-title" title="' + esc(t.name) + (t.missing ? ' (no conectado)' : '') + '">' + src + esc(t.name) + '</div></td>' +
         '<td class="t-artist" title="' + esc(t.artist) + '">' + esc(t.artist || '—') + '</td>' +
         '<td class="t-bpm">' + bpm + '</td>' +
         '<td class="t-key">' + keyBadge(t) + '</td>' +
@@ -279,5 +351,6 @@ const Library = (() => {
     if (searchEl) searchEl.addEventListener('input', () => { filter = searchEl.value; render(); });
   }
 
-  return { init, on, get, addFiles, decode, updateBpm, reanalyze, remove, clear, coverUrl, render, tracks, fmt };
+  return { init, on, get, addFiles, decode, updateBpm, reanalyze, remove, clear, coverUrl, render, tracks, fmt,
+    listSources, putSource, deleteSource, syncSource, countBySource, removeBySource, setSourceFilter };
 })();

@@ -56,6 +56,7 @@
       if (track.analyzing) toast('Pista cargada en ' + deckId + '. El análisis se completará en segundo plano.');
       Library.render();
     } catch (e) {
+      if (e && e.friendly) { deck.setError('Pista no disponible'); toast(e.message); Library.render(); return; }
       console.error(e);
       deck.setError('No se pudo decodificar "' + track.name + '"');
       toast('El navegador no pudo decodificar ese archivo.');
@@ -79,7 +80,7 @@
   Library.init({
     tbody: $('#lib-body'), status: $('#lib-status'), search: $('#lib-search'), count: $('#lib-count'),
     hooks: { masterCamelot: () => { const d = masterDeck(); return d && d.track ? d.track.camelot : null; } }
-  }).then(() => { SpotifyLink.refreshMatches(); Automix.libraryReady(); updateTree(); });
+  }).then(() => { SpotifyLink.refreshMatches(); Automix.libraryReady(); updateTree(); return Sources.init($('#sources'), sourcesHooks); });
 
   const fileInput = $('#file-input');
   fileInput.addEventListener('change', () => { Library.addFiles(fileInput.files); fileInput.value = ''; SpotifyLink.refreshMatches(); updateTree(); });
@@ -98,10 +99,26 @@
   });
 
   /* ---- Navegador (árbol lateral) ---- */
-  document.querySelectorAll('.tree-item').forEach(btn => btn.addEventListener('click', () => {
-    document.querySelectorAll('.tree-item').forEach(b => b.classList.toggle('active', b === btn));
-    document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + btn.dataset.panel || p.id === btn.dataset.panel));
+  function showPanel(name) {
+    document.querySelectorAll('.tree-item[data-panel]').forEach(b => b.classList.toggle('active', b.dataset.panel === name));
+    document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + name || p.id === name));
+  }
+  document.querySelectorAll('.tree-item[data-panel]').forEach(btn => btn.addEventListener('click', () => {
+    showPanel(btn.dataset.panel);
+    if (btn.dataset.panel === 'collection') { Library.setSourceFilter(null); document.querySelectorAll('.src-item').forEach(x => x.classList.remove('active')); }
   }));
+
+  /* ---- Fuentes (carpetas y pendrives vinculados): se inicia cuando la colección está lista ---- */
+  const sourcesHooks = {
+    toast,
+    onChange: () => { updateTree(); SpotifyLink.refreshMatches(); },
+    onSelect: id => {
+      showPanel('collection');
+      document.querySelector('.tree-item[data-panel="collection"]').classList.remove('active');
+      document.querySelectorAll('.src-item').forEach(x => x.classList.toggle('active', x.dataset.id === id));
+      Library.setSourceFilter(id);
+    }
+  };
   function updateTree() {
     $('#tree-count').textContent = Library.tracks.length || '';
     $('#tree-queue').textContent = Automix.queue.length || '';
@@ -259,5 +276,5 @@
   }
   requestAnimationFrame(frame);
 
-  window.MixDeck = { deckA, deckB, Library, Engine, Mixer, SpotifyLink, Automix, Analyzer };
+  window.MixDeck = { deckA, deckB, Library, Engine, Mixer, SpotifyLink, Automix, Analyzer, Sources };
 })();

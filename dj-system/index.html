@@ -52,6 +52,7 @@
         <button class="tree-item active" data-panel="collection"><span class="ti-icon">▤</span>Colección <em id="tree-count"></em></button>
         <button class="tree-item" data-panel="automix"><span class="ti-icon">⟳</span>Automix <em id="tree-queue"></em></button>
         <button class="tree-item" data-panel="spotify"><span class="ti-icon sp">●</span>Spotify</button>
+        <div class="tree-sources" id="sources"></div>
         <div class="tree-foot">
           <label class="btn primary file-btn">+ Importar pistas
             <input type="file" id="file-input" accept="audio/*,.mp3,.wav,.ogg,.m4a,.aac,.flac" multiple hidden>
@@ -115,6 +116,7 @@
       </table>
     </div>
     <p><kbd>←</kbd> <kbd>→</kbd> mueven el crossfader. Clic en la onda para saltar. Doble clic en una pista de la colección la carga en el deck libre. Clic en el BPM para corregirlo. Perillas: arrastra vertical, doble clic reinicia, Shift ajusta fino.</p>
+    <p>En <b>Fuentes</b> puedes vincular una carpeta o un pendrive: la app la recuerda, la vuelve a leer al iniciar, analiza las pistas nuevas y marca las que faltan si el pendrive no está conectado (Chrome y Edge de escritorio).</p>
     <p>El análisis automático marca el CUE en el primer compás, el hot cue 1 en el drop y el hot cue 2 en el inicio del outro. Las tonalidades compatibles con la pista que suena se resaltan en verde.</p>
     <button id="help-close" class="btn primary">Cerrar</button>
   </dialog>
@@ -127,6 +129,7 @@
   <script src="js/analyzer.js"></script>
   <script src="js/tags.js"></script>
   <script src="js/library.js"></script>
+  <script src="js/sources.js"></script>
   <script src="js/deck.js"></script>
   <script src="js/mixer.js"></script>
   <script src="js/spotify.js"></script>
