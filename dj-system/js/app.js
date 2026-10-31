@@ -92,9 +92,9 @@
     if (!added.length) toast('No encontré archivos de audio en lo que soltaste.');
     updateTree();
   });
-  $('#lib-clear').addEventListener('click', () => {
+  $('#lib-clear').addEventListener('click', async () => {
     if (!Library.tracks.length) return;
-    if (confirm('¿Vaciar la colección? Las pistas cargadas en los decks siguen sonando.')) Library.clear().then(updateTree);
+    if (await Dialogs.confirm('¿Vaciar la colección?', 'Las pistas cargadas en los decks siguen sonando.', 'Vaciar')) Library.clear().then(updateTree);
   });
 
   /* ---- Navegador (árbol lateral) ---- */
@@ -123,8 +123,21 @@
   $('#master-vol').addEventListener('input', e => {
     Engine.master.gain.setTargetAtTime(parseFloat(e.target.value), Engine.ctx.currentTime, 0.01);
   });
+  const CAPS = Object.assign({ spotify: true, download: true }, window.MIXDECK_CAPS || {});
   const recBtn = $('#rec-btn'), recLink = $('#rec-link');
-  let recStart = 0;
+  let recStart = 0, recBlob = null, recName = '';
+  if (!CAPS.download) recBtn.classList.add('hidden');
+  /* En páginas publicadas la descarga pasa por la capacidad "downloads" del host (el visitante confirma). */
+  if (CAPS.download === 'capability') {
+    recLink.addEventListener('click', async e => {
+      e.preventDefault();
+      if (!recBlob) return;
+      const dl = window.claude && window.claude.use ? await window.claude.use('downloads') : null;
+      if (!dl) return toast('La descarga no está disponible en esta vista.');
+      try { await dl.save({ filename: recName, data: recBlob }); toast('Mezcla guardada.'); }
+      catch (err) { if (!err || err.code !== 'declined') toast('No se pudo guardar la mezcla' + (err && err.message ? ': ' + err.message : '.')); }
+    });
+  }
   recBtn.addEventListener('click', async () => {
     Engine.resume();
     if (!Engine.recording) {
@@ -137,10 +150,11 @@
       recBtn.classList.remove('on');
       recBtn.textContent = '● REC';
       if (!blob || !blob.size) return toast('La grabación quedó vacía.');
-      const ext = blob.type.includes('ogg') ? 'ogg' : blob.type.includes('mp4') ? 'm4a' : 'webm';
+      const ext = blob.type.includes('ogg') ? 'ogg' : blob.type.includes('mp4') ? 'mp4' : 'webm';
       const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
-      recLink.href = URL.createObjectURL(blob);
-      recLink.download = 'mix-' + stamp + '.' + ext;
+      recBlob = blob; recName = 'mix-' + stamp + '.' + ext;
+      if (CAPS.download === 'capability') { recLink.removeAttribute('download'); recLink.href = '#'; }
+      else { recLink.href = URL.createObjectURL(blob); recLink.download = recName; }
       recLink.textContent = '⬇ Mezcla (' + Library.fmt((Date.now() - recStart) / 1000) + ')';
       recLink.classList.remove('hidden');
     }

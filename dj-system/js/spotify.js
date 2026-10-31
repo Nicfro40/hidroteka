@@ -26,7 +26,9 @@ const SpotifyLink = (() => {
   const fmt = s => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
 
   /* ---------- Entorno ---------- */
+  function hostBlocked() { return window.MIXDECK_CAPS && window.MIXDECK_CAPS.spotify === false; }
   function supported() {
+    if (hostBlocked()) return false;
     return location.protocol === 'https:' || location.hostname === '127.0.0.1' || location.hostname === '[::1]';
   }
   function redirectUri() { return location.origin + location.pathname; }
@@ -320,12 +322,16 @@ const SpotifyLink = (() => {
     const ok = supported();
     el.login.classList.toggle('hidden', connected());
     el.logout.classList.toggle('hidden', !connected());
-    el.status.textContent = !ok ? 'No disponible desde archivo local'
+    el.status.textContent = !ok ? (hostBlocked() ? 'No disponible en esta versión publicada' : 'No disponible desde archivo local')
       : !clientId ? 'Falta configurar el Client ID'
       : !connected() ? 'Desconectado'
       : 'Conectado' + (user ? ' como ' + (user.display_name || user.id) + (user.product === 'premium' ? ' · Premium' : ' · sin Premium (sin reproductor)') : '…');
     el.player.classList.toggle('hidden', !connected() || !playerState);
 
+    if (hostBlocked()) {
+      el.body.innerHTML = '<p class="sp-msg">' + ((window.MIXDECK_CAPS && window.MIXDECK_CAPS.spotifyNote) || 'Esta versión publicada no puede conectarse con Spotify. Usa la versión alojada en tu propio dominio o en GitHub Pages.') + '</p>';
+      return;
+    }
     if (!ok) {
       el.body.innerHTML = '<p class="sp-msg">Spotify exige que la app se abra desde <b>http://127.0.0.1</b> o <b>https</b>, no desde un archivo local. ' +
         'Por ejemplo, en la carpeta del proyecto:</p><pre class="sp-code">python3 -m http.server 8080 --bind 127.0.0.1</pre>' +

@@ -303,3 +303,11 @@ dialog p { color: var(--muted); font-size: .84rem; line-height: 1.5; }
   .bar-count { display: none; }
   .t-artist, .t-energy, .lib-table th:nth-child(3), .lib-table th:nth-child(7) { display: none; }
 }
+
+/* ---------- Diálogos propios ---------- */
+.ui-dialog { max-width: 420px; width: calc(100vw - 40px); }
+.ui-title { margin: 0 0 8px; }
+.ui-text { margin: 0 0 12px; }
+.ui-input { width: 100%; background: #0d0f14; color: var(--text); border: 1px solid var(--line-2); border-radius: 4px; padding: 8px 10px; font-family: var(--mono); font-size: 1rem; margin-bottom: 14px; }
+.ui-input:focus { outline: none; border-color: var(--accent); }
+.ui-actions { display: flex; justify-content: flex-end; gap: 8px; }

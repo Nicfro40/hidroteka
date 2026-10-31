@@ -467,12 +467,12 @@ class Deck {
       el.addEventListener('pointerup', bendUp);
       el.addEventListener('pointerleave', bendUp);
     });
-    q('.bpm-btn').addEventListener('click', () => {
+    q('.bpm-btn').addEventListener('click', async () => {
       if (!this.buffer) return;
-      const v = prompt('BPM de la pista "' + this.track.name + '":', this.bpm ? String(this.bpm) : '');
+      const v = await Dialogs.prompt('Corregir BPM', this.bpm ? String(this.bpm) : '', this.track.name);
       if (v === null) return;
       const n = parseFloat(String(v).replace(',', '.'));
-      if (!isFinite(n) || n < 40 || n > 300) return;
+      if (!isFinite(n) || n < 40 || n > 300) { this.onNotice('Escribe un BPM entre 40 y 300.'); return; }
       this.setBpm(Math.round(n * 100) / 100, this.firstBeat);
       this.onBpmEdit(this.track, this.bpm);
     });
