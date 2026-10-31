@@ -13,18 +13,32 @@ npx serve dj-system
 
 El audio se activa con el primer clic en la página (política de autoplay de los navegadores).
 
+## Análisis automático (estilo rekordbox)
+
+Cada pista que importas se analiza sola, en segundo plano, y el resultado queda guardado en el navegador:
+
+| Dato | Cómo se obtiene | Dónde se usa |
+| --- | --- | --- |
+| Etiquetas | ID3v2: título, artista, álbum, carátula, BPM/tonalidad si vienen | Cabecera del deck, colección, cruce con Spotify |
+| BPM y grilla | Picos de energía en graves + refinamiento por coherencia de fase | Grilla en la onda, SYNC, loops, Automix |
+| Tonalidad | Cromagrama por FFT contra perfiles de Krumhansl, en notación Camelot (8A, 9B…) | Badge de key; las compatibles con la pista maestra se resaltan en verde |
+| Onda en 3 bandas | Graves (azul), medios (naranja) y agudos (blanco) | Ondas apiladas y vista general |
+| Ganancia automática | RMS de la pista hacia -16 dBFS | Nivel parejo entre pistas sin tocar el trim |
+| Energía 1-10 | Sonoridad y proporción de graves | Columna de la colección |
+| Estructura | Energía de graves por compás: primer compás, drop y comienzo del outro | CUE en el primer compás, hot cue 1 en el drop, hot cue 2 en el outro, punto de salida de Automix |
+
 ## Qué incluye
 
-- **Dos decks** con onda ampliada (8 s alrededor del cabezal, con grilla de beats) y onda completa clicable para saltar.
+- **Dos decks** con ondas ampliadas apiladas a lo ancho (8 s alrededor del cabezal, grilla de beats, contador de compás) y onda completa clicable para saltar.
 - **Transporte estilo CDJ**: Play/Pause, CUE (fija, vuelve y previsualiza mientras se mantiene), 4 hot cues por deck.
 - **Loops**: in/out manual, loop automático de 4 beats alineado a la grilla, mitad, doble y salir.
 - **Pitch** ±16 % con lectura de porcentaje, pitch bend momentáneo y botón de reinicio.
-- **BPM automático** al agregar una pista (detección por energía en graves) con corrección manual al hacer clic en el BPM.
+- **Análisis automático** al importar (ver arriba) con corrección manual del BPM al hacer clic en él.
 - **SYNC**: iguala el tempo con el otro deck y alinea la fase de los beats si ambos están sonando.
 - **Mixer**: trim, EQ de tres bandas, medidores de nivel por canal, faders y crossfader con curva suave.
 - **Efectos por deck**: filtro barrido (pasa bajos / pasa altos), eco sincronizado al tempo y reverb.
 - **Grabación de la mezcla** desde el bus master, con descarga en WebM/Opus (u OGG/M4A según el navegador).
-- **Biblioteca** con arrastrar y soltar. Las pistas quedan guardadas en IndexedDB, así que siguen ahí al recargar.
+- **Navegador** con árbol lateral (Colección, Automix, Spotify), columnas ordenables, búsqueda, carátulas y doble clic para cargar en el deck libre. Las pistas quedan guardadas en IndexedDB.
 - **Atajos de teclado** para todo el transporte (botón "? Atajos" o tecla `?`).
 - **Automix**: arma una cola y la app mezcla sola (ver sección siguiente).
 - **Spotify**: búsqueda, playlists como setlists, cruce con la biblioteca local y reproductor (ver más abajo).
@@ -85,7 +99,8 @@ dj-system/
 └── js/
     ├── engine.js   Contexto de audio, bus master, grabación
     ├── knob.js     Perilla rotatoria reutilizable
-    ├── bpm.js      Detección de BPM y fase del beat
+    ├── analyzer.js Análisis: BPM, grilla, tonalidad, bandas, ganancia, energía, estructura
+    ├── tags.js     Lectura de etiquetas ID3v2
     ├── library.js  Biblioteca, decodificación, IndexedDB
     ├── deck.js     Reproducción, cue, loops, pitch, sync, FX, dibujo
     ├── mixer.js    Strips de canal, medidores, crossfader
@@ -98,13 +113,14 @@ dj-system/
 
 - No hay salida de pre-escucha (auriculares) separada: los navegadores exponen una sola salida de audio.
 - Los formatos soportados dependen del navegador (MP3, WAV, OGG y AAC funcionan en todos; FLAC no en Safari).
-- La detección de BPM funciona bien en música con pulso marcado; en material sin bajo claro conviene corregir a mano.
+- La detección de BPM y de estructura funciona bien en música con pulso marcado; en material sin bajo claro conviene corregir a mano.
+- La tonalidad se estima sobre toda la pista; en temas con modulaciones puede quedar en una tonalidad vecina.
 - No hay cuenta de usuario ni sincronización entre dispositivos: todo vive en el navegador local.
 - Spotify solo sirve para buscar, armar setlists y escuchar; su audio no se puede mezclar (ver arriba).
 
 ## Siguientes pasos sugeridos
 
 1. Soporte de controladoras MIDI (Web MIDI API) para jog wheels y pads.
-2. Análisis de tonalidad (key detection) para mezcla armónica.
+2. Análisis por frases (8/16 compases) y detección de voces.
 3. Listas de reproducción y etiquetas en la biblioteca.
 4. Backend opcional para compartir bibliotecas y grabaciones entre dispositivos.

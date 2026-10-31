@@ -1,5 +1,6 @@
-/* Deck: reproducción, cue, hot cues, loops, pitch, sync, efectos y dibujo de ondas. */
-const HOT_COLORS = ['#f43f5e', '#a3e635', '#38bdf8', '#c084fc'];
+/* Deck: reproducción, cue, hot cues, loops, pitch, sync, efectos y dibujo de ondas en 3 bandas. */
+const HOT_COLORS = ['#ff3b5c', '#9ef01a', '#3ec5ff', '#c77dff'];
+const WAVE_COLORS = { low: '#2f6df6', mid: '#f59e0b', high: '#f5f7ff' };
 
 function hexToRgba(hex, a) {
   const n = parseInt(hex.slice(1), 16);
@@ -30,8 +31,7 @@ class Deck {
   constructor(id, mount, opts = {}) {
     this.id = id;
     this.ctx = Engine.ctx;
-    this.color = opts.color || '#22d3ee';
-    this.colorDim = hexToRgba(this.color, 0.4);
+    this.color = opts.color || '#19c4ff';
     this.keyHint = opts.keyHint || '';
     this.onLoadRequest = opts.onLoadRequest || (() => {});
     this.onBpmEdit = opts.onBpmEdit || (() => {});
@@ -43,7 +43,7 @@ class Deck {
     this.ZOOM_SECONDS = 8;
     this.PITCH_RANGE = 16;
 
-    this.track = null; this.buffer = null; this.peaks = null; this.duration = 0;
+    this.track = null; this.buffer = null; this.peaks = null; this.bands = null; this.duration = 0;
     this.status = 'empty';
     this.playing = false; this.pausedPos = 0; this.startPos = 0; this.startCtxTime = 0;
     this.source = null;
@@ -51,17 +51,18 @@ class Deck {
     this.cuePoint = 0; this.previewing = false;
     this.hotCues = [null, null, null, null];
     this.loop = { active: false, start: 0, end: 0, inPoint: null };
-    this.bpm = null; this.firstBeat = 0;
+    this.bpm = null; this.firstBeat = 0; this.audioStart = 0; this.audioEnd = 0;
     this.overviewCache = null;
     this.vu = { level: 0, peak: 0, hold: 0 };
 
     this._buildGraph();
-    this._buildUI(mount);
+    this._buildUI(mount, opts.zoomMount);
   }
 
   /* ---------------- Grafo de audio ---------------- */
   _buildGraph() {
     const c = this.ctx;
+    this.autoGain = c.createGain();
     this.eqLow = c.createBiquadFilter(); this.eqLow.type = 'lowshelf'; this.eqLow.frequency.value = 250;
     this.eqMid = c.createBiquadFilter(); this.eqMid.type = 'peaking'; this.eqMid.frequency.value = 1000; this.eqMid.Q.value = 0.9;
     this.eqHigh = c.createBiquadFilter(); this.eqHigh.type = 'highshelf'; this.eqHigh.frequency.value = 4000;
@@ -79,8 +80,9 @@ class Deck {
     this.xf = c.createGain();
     this.analyser = c.createAnalyser(); this.analyser.fftSize = 256;
     this.vuData = new Uint8Array(this.analyser.fftSize);
-    this.input = this.eqLow;
+    this.input = this.autoGain;
 
+    this.autoGain.connect(this.eqLow);
     this.eqLow.connect(this.eqMid); this.eqMid.connect(this.eqHigh); this.eqHigh.connect(this.filter);
     this.filter.connect(this.preFx);
     this.preFx.connect(this.fxSum);
@@ -137,6 +139,20 @@ class Deck {
     const L = this.loop;
     if (L.active && pos >= L.end) { const len = L.end - L.start; pos = L.start + ((pos - L.start) % len); }
     return Math.min(pos, this.duration);
+  }
+  /* Beat dentro del compás (0-3, fraccional) y número de compás, según la grilla. */
+  beatInfo() {
+    if (!this.buffer || !this.bpm) return null;
+    const beats = (this.getPosition() - this.firstBeat) / (60 / this.bpm);
+    const bar = Math.floor(beats / 4);
+    return { beat: ((beats % 4) + 4) % 4, bar };
+  }
+  beatAtOrAfter(t, barAligned) {
+    if (!this.bpm) return t;
+    const beat = 60 / this.bpm;
+    let k = Math.ceil((t - this.firstBeat) / beat - 1e-6);
+    if (barAligned) k = Math.ceil(k / 4) * 4;
+    return this.firstBeat + k * beat;
   }
 
   _startSource(pos) {
@@ -196,7 +212,6 @@ class Deck {
     this.onEnded(this);
   }
 
-  /* CUE estilo CDJ: en reproducción vuelve al cue; en pausa fija el cue o lo previsualiza mientras se mantiene. */
   cuePress() {
     if (!this.buffer) return;
     if (this.playing) { this.previewing = false; this.pause(); this.seek(this.cuePoint); return; }
@@ -214,7 +229,6 @@ class Deck {
     this.pause();
     this.seek(this.cuePoint);
   }
-
   hotCue(i, clear) {
     if (!this.buffer) return;
     if (clear) this.hotCues[i] = null;
@@ -312,7 +326,7 @@ class Deck {
     return Math.abs(this.effectiveBpm() - other.effectiveBpm()) < 0.05;
   }
 
-  /* ---------------- Carga ---------------- */
+  /* ---------------- Carga y análisis ---------------- */
   setLoading(track) {
     this.status = 'loading';
     this.titleEl.textContent = 'Cargando ' + track.name + '…';
@@ -325,20 +339,33 @@ class Deck {
     this.pause();
     this.track = track; this.buffer = buffer; this.duration = buffer.duration;
     this.peaks = computePeaks(buffer, this.PPS);
-    this._findAudioBounds();
-    this.bpm = track.bpm || null; this.firstBeat = track.firstBeat || 0;
     this.pausedPos = 0; this.cuePoint = 0; this.previewing = false;
     this.hotCues = [null, null, null, null];
     this.loop = { active: false, start: 0, end: 0, inPoint: null };
-    this.overviewCache = null;
     this.status = 'ready';
-    this.titleEl.textContent = track.name;
-    this.titleEl.title = track.name;
     this.mount.classList.add('loaded');
-    this._updateDelayTime();
-    this._renderBpm(); this._renderTransport(); this._renderHotCues(); this._renderLoop();
+    this.applyAnalysis(track);
+    this._renderTransport(); this._renderHotCues(); this._renderLoop();
   }
-  /* Primer y último instante con señal audible (umbral ≈ -34 dB), para saltar silencios. */
+  /* Aplica (o reaplica, cuando termina el análisis en segundo plano) los datos de la pista. */
+  applyAnalysis(track) {
+    if (!this.buffer || !track || this.track !== track) return;
+    this.bpm = track.bpm || null; this.firstBeat = track.firstBeat || 0;
+    this.bands = track.bands && track.bands.low ? track.bands : null;
+    if (track.audioEnd) { this.audioStart = track.audioStart || 0; this.audioEnd = track.audioEnd; }
+    else this._findAudioBounds();
+    this.autoGain.gain.setTargetAtTime(Engine.dbToGain(track.gainDb || 0), this.ctx.currentTime, 0.05);
+    const cues = track.cues || null;
+    if (cues && !this.playing && this.pausedPos === 0) {
+      this.cuePoint = cues.intro || 0;
+      this.pausedPos = this.cuePoint;
+      if (cues.drop != null && this.hotCues[0] == null) this.hotCues[0] = cues.drop;
+      if (cues.outro != null && this.hotCues[1] == null) this.hotCues[1] = cues.outro;
+    }
+    this.overviewCache = null;
+    this._updateDelayTime();
+    this._renderHeader(); this._renderBpm(); this._renderHotCues(); this._renderTransport();
+  }
   _findAudioBounds() {
     const P = this.peaks, th = 0.02;
     let a = 0, b = P.length - 1;
@@ -346,14 +373,6 @@ class Deck {
     while (b > a && P[b] < th) b--;
     this.audioStart = Math.min(a / this.PPS, this.duration);
     this.audioEnd = Math.min((b + 1) / this.PPS, this.duration);
-  }
-  /* Posición del primer beat de la grilla igual o posterior a `t` (o `t` si no hay BPM). */
-  beatAtOrAfter(t, barAligned) {
-    if (!this.bpm) return t;
-    const beat = 60 / this.bpm;
-    let k = Math.ceil((t - this.firstBeat) / beat - 1e-6);
-    if (barAligned) k = Math.ceil(k / 4) * 4;
-    return this.firstBeat + k * beat;
   }
   setBpm(bpm, firstBeat) {
     this.bpm = bpm || null;
@@ -363,21 +382,24 @@ class Deck {
   }
 
   /* ---------------- UI ---------------- */
-  _buildUI(mount) {
+  _buildUI(mount, zoomMount) {
     this.mount = mount;
     mount.style.setProperty('--accent', this.color);
     mount.innerHTML =
       '<div class="deck-head">' +
-        '<div class="deck-badge">' + this.id + '</div>' +
-        '<div class="track-title">Sin pista · arrastra un archivo aquí o cárgalo desde la biblioteca</div>' +
+        '<div class="deck-art"><span class="deck-badge">' + this.id + '</span></div>' +
+        '<div class="deck-info">' +
+          '<div class="track-title">Sin pista</div>' +
+          '<div class="track-artist">Arrastra un archivo o cárgalo desde la colección</div>' +
+          '<div class="deck-meta">' +
+            '<span class="key-badge empty deck-key">—</span>' +
+            '<button class="bpm-btn" title="Clic para corregir el BPM a mano"><strong class="bpm-eff">—</strong><small class="bpm-orig"></small> BPM</button>' +
+            '<span class="pitch-read">+0.00%</span>' +
+            '<span class="gain-read" title="Ganancia automática"></span>' +
+          '</div>' +
+        '</div>' +
         '<div class="time"><span class="t-el">0:00.0</span><span class="t-rem">-0:00.0</span></div>' +
       '</div>' +
-      '<div class="bpm-row">' +
-        '<button class="bpm-btn" title="Clic para corregir el BPM a mano">BPM <strong class="bpm-eff">—</strong><small class="bpm-orig"></small></button>' +
-        '<span class="pitch-read">+0.00%</span>' +
-        '<span class="key-hint">' + this.keyHint + '</span>' +
-      '</div>' +
-      '<canvas class="wave-zoom"></canvas>' +
       '<canvas class="wave-over"></canvas>' +
       '<div class="deck-body">' +
         '<div class="deck-main">' +
@@ -398,6 +420,7 @@ class Deck {
             '<button class="btn btn-lexit" title="Salir del loop">EXIT</button>' +
           '</div>' +
           '<div class="fx"></div>' +
+          '<div class="key-hint">' + this.keyHint + '</div>' +
         '</div>' +
         '<div class="pitch-col">' +
           '<button class="btn bend bend-plus" title="Acelerar momentáneamente">+</button>' +
@@ -408,10 +431,14 @@ class Deck {
       '</div>';
 
     const q = s => mount.querySelector(s);
-    this.titleEl = q('.track-title');
+    this.titleEl = q('.track-title'); this.artistEl = q('.track-artist'); this.artEl = q('.deck-art');
+    this.keyEl = q('.deck-key'); this.gainEl = q('.gain-read');
     this.tEl = q('.t-el'); this.tRem = q('.t-rem');
     this.bpmEff = q('.bpm-eff'); this.bpmOrig = q('.bpm-orig'); this.pitchRead = q('.pitch-read');
-    this.zoomCv = q('.wave-zoom'); this.overCv = q('.wave-over');
+    this.overCv = q('.wave-over');
+    this.zoomCv = document.createElement('canvas');
+    this.zoomCv.className = 'wave-zoom';
+    (zoomMount || mount).appendChild(this.zoomCv);
     this.btnPlay = q('.btn-play'); this.btnCue = q('.btn-cue'); this.btnSync = q('.btn-sync');
     this.hcBtns = Array.from(mount.querySelectorAll('.hc'));
     this.btnIn = q('.btn-lin'); this.btnOut = q('.btn-lout'); this.btnAuto = q('.btn-auto');
@@ -464,30 +491,50 @@ class Deck {
 
     const fx = q('.fx');
     const pct = v => Math.round(v * 100) + '%';
+    const hz = f => f >= 1000 ? (f / 1000).toFixed(1) + 'k' : Math.round(f) + '';
     const fmtFilter = v => Math.abs(v) < 0.03 ? 'OFF'
       : v < 0 ? 'LP ' + hz(20000 * Math.pow(60 / 20000, -v)) : 'HP ' + hz(20 * Math.pow(10000 / 20, v));
-    const hz = f => f >= 1000 ? (f / 1000).toFixed(1) + 'k' : Math.round(f) + '';
     this.knobFilter = createKnob({ label: 'FILTER', min: -1, max: 1, value: 0, format: fmtFilter, onChange: v => this.setFilter(v) });
     this.knobEcho = createKnob({ label: 'ECHO', min: 0, max: 1, value: 0, format: pct, onChange: v => this.setEcho(v) });
     this.knobReverb = createKnob({ label: 'REVERB', min: 0, max: 1, value: 0, format: pct, onChange: v => this.setReverb(v) });
     fx.append(this.knobFilter.el, this.knobEcho.el, this.knobReverb.el);
 
-    mount.addEventListener('dragover', e => { e.preventDefault(); mount.classList.add('drop'); });
-    mount.addEventListener('dragleave', () => mount.classList.remove('drop'));
-    mount.addEventListener('drop', e => {
-      e.preventDefault();
-      mount.classList.remove('drop');
-      const id = e.dataTransfer.getData('text/mixdeck-id');
-      if (id) this.onLoadRequest(this.id, { id });
-      else if (e.dataTransfer.files && e.dataTransfer.files.length) this.onLoadRequest(this.id, { files: e.dataTransfer.files });
+    const dropTargets = [mount, this.zoomCv];
+    dropTargets.forEach(t => {
+      t.addEventListener('dragover', e => { e.preventDefault(); mount.classList.add('drop'); });
+      t.addEventListener('dragleave', () => mount.classList.remove('drop'));
+      t.addEventListener('drop', e => {
+        e.preventDefault();
+        mount.classList.remove('drop');
+        const id = e.dataTransfer.getData('text/mixdeck-id');
+        if (id) this.onLoadRequest(this.id, { id });
+        else if (e.dataTransfer.files && e.dataTransfer.files.length) this.onLoadRequest(this.id, { files: e.dataTransfer.files });
+      });
     });
-
-    if (window.ResizeObserver) {
-      new ResizeObserver(() => { this.overviewCache = null; }).observe(mount);
-    }
-    this._renderTransport(); this._renderHotCues(); this._renderLoop(); this._renderBpm();
+    if (window.ResizeObserver) new ResizeObserver(() => { this.overviewCache = null; }).observe(mount);
+    this._renderHeader(); this._renderTransport(); this._renderHotCues(); this._renderLoop(); this._renderBpm();
   }
 
+  _renderHeader() {
+    const t = this.track;
+    if (!t) return;
+    this.titleEl.textContent = t.name;
+    this.titleEl.title = t.name;
+    this.artistEl.textContent = t.artist || (t.album ? t.album : '—');
+    const cover = Library.coverUrl(t);
+    this.artEl.style.backgroundImage = cover ? 'url("' + cover.replace(/"/g, '%22') + '")' : '';
+    this.artEl.classList.toggle('has-art', !!cover);
+    if (t.camelot) {
+      this.keyEl.textContent = t.camelot;
+      this.keyEl.title = t.key;
+      this.keyEl.className = 'key-badge deck-key';
+      this.keyEl.style.setProperty('--kc', Analyzer.camelotColor(t.camelot));
+    } else {
+      this.keyEl.textContent = t.analyzing ? '…' : '—';
+      this.keyEl.className = 'key-badge empty deck-key';
+    }
+    this.gainEl.textContent = t.gainDb ? 'GAIN ' + (t.gainDb > 0 ? '+' : '') + t.gainDb.toFixed(1) + ' dB' : '';
+  }
   _renderTransport() {
     this.btnPlay.textContent = this.playing && !this.previewing ? '❚❚ PAUSE' : '▶ PLAY';
     this.btnPlay.classList.toggle('on', this.playing && !this.previewing);
@@ -527,7 +574,43 @@ class Deck {
     g.fillStyle = color;
     g.fillRect(x - 0.5, 0, 1.5, h);
     g.beginPath(); g.moveTo(x - 5, 0); g.lineTo(x + 5, 0); g.lineTo(x, 7); g.closePath(); g.fill();
-    if (label) { g.font = 'bold 10px sans-serif'; g.textAlign = 'left'; g.fillText(label, x + 3, h - 4); }
+    if (label) { g.font = 'bold 10px sans-serif'; g.textAlign = 'left'; g.textBaseline = 'alphabetic'; g.fillText(label, x + 3, h - 4); }
+  }
+  /* Dibuja una columna de onda: 3 bandas superpuestas (graves, medios, agudos) o el pico mono. */
+  _column(g, x, mid, h, i, alpha, width) {
+    width = width || 1;
+    if (this.bands) {
+      const B = this.bands, amp = h * 0.47 / 255;
+      const l = (B.low[i] || 0) * amp, m = (B.mid[i] || 0) * amp, hi = (B.high[i] || 0) * amp;
+      g.globalAlpha = alpha;
+      g.fillStyle = WAVE_COLORS.low; g.fillRect(x, mid - l, width, l * 2);
+      g.fillStyle = WAVE_COLORS.mid; g.fillRect(x, mid - m, width, m * 2);
+      g.fillStyle = WAVE_COLORS.high; g.fillRect(x, mid - hi, width, hi * 2);
+      g.globalAlpha = 1;
+    } else {
+      const v = this.peaks[i] || 0;
+      const hh = Math.max(1, v * h * 0.46);
+      g.globalAlpha = alpha;
+      g.fillStyle = this.color; g.fillRect(x, mid - hh, width, hh * 2);
+      g.globalAlpha = 1;
+    }
+  }
+  _columnMax(g, x, mid, h, a, b, alpha) {
+    if (this.bands) {
+      const B = this.bands, amp = h * 0.47 / 255;
+      let l = 0, m = 0, hi = 0;
+      for (let i = a; i < b; i++) { if (B.low[i] > l) l = B.low[i]; if (B.mid[i] > m) m = B.mid[i]; if (B.high[i] > hi) hi = B.high[i]; }
+      g.globalAlpha = alpha;
+      g.fillStyle = WAVE_COLORS.low; g.fillRect(x, mid - l * amp, 1, l * amp * 2);
+      g.fillStyle = WAVE_COLORS.mid; g.fillRect(x, mid - m * amp, 1, m * amp * 2);
+      g.fillStyle = WAVE_COLORS.high; g.fillRect(x, mid - hi * amp, 1, hi * amp * 2);
+      g.globalAlpha = 1;
+    } else {
+      let v = 0;
+      for (let i = a; i < b; i++) if (this.peaks[i] > v) v = this.peaks[i];
+      const hh = Math.max(0.5, v * h * 0.45);
+      g.globalAlpha = alpha; g.fillStyle = this.color; g.fillRect(x, mid - hh, 1, hh * 2); g.globalAlpha = 1;
+    }
   }
 
   draw() {
@@ -543,10 +626,10 @@ class Deck {
 
   _drawZoom(pos) {
     const { g, w, h } = this._sizeCanvas(this.zoomCv);
-    g.fillStyle = '#0a0c11'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#07080b'; g.fillRect(0, 0, w, h);
     if (!this.buffer) {
-      g.fillStyle = '#4b5162'; g.font = '13px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
-      g.fillText(this.status === 'loading' ? 'Cargando…' : 'Suelta una pista aquí', w / 2, h / 2);
+      g.fillStyle = '#3a3f4d'; g.font = '12px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(this.status === 'loading' ? 'Cargando…' : 'DECK ' + this.id + ' · suelta una pista aquí', w / 2, h / 2);
       return;
     }
     const win = this.ZOOM_SECONDS, t0 = pos - win / 2, pps = w / win;
@@ -557,23 +640,20 @@ class Deck {
       const beat = 60 / this.bpm;
       let k = Math.ceil((t0 - this.firstBeat) / beat);
       for (let t = this.firstBeat + k * beat; t < t0 + win; k++, t = this.firstBeat + k * beat) {
-        g.fillStyle = (k % 4 === 0) ? 'rgba(255,255,255,.45)' : 'rgba(255,255,255,.13)';
+        const down = ((k % 4) + 4) % 4 === 0;
+        g.fillStyle = down ? 'rgba(255,255,255,.5)' : 'rgba(255,255,255,.14)';
         g.fillRect((t - t0) * pps, 0, 1, h);
+        if (down) { g.fillStyle = 'rgba(255,255,255,.5)'; g.fillRect((t - t0) * pps - 2, 0, 5, 3); }
       }
     }
-    const mid = h / 2, P = this.peaks, PPS = this.PPS;
-    const xPlay = Math.floor(w / 2);
-    g.fillStyle = this.colorDim;
+    const mid = h / 2, PPS = this.PPS, xPlay = Math.floor(w / 2);
     for (let x = 0; x < w; x++) {
-      if (x === xPlay) g.fillStyle = this.color;
       const t = t0 + x / pps;
       if (t < 0 || t >= this.duration) continue;
-      const v = P[Math.floor(t * PPS)] || 0;
-      const hh = Math.max(1, v * h * 0.46);
-      g.fillRect(x, mid - hh, 1, hh * 2);
+      this._column(g, x, mid, h, Math.floor(t * PPS), x < xPlay ? 0.5 : 1);
     }
     const cx = (this.cuePoint - t0) * pps;
-    if (cx >= -6 && cx <= w + 6) this._marker(g, cx, h, '#f59e0b');
+    if (cx >= -6 && cx <= w + 6) this._marker(g, cx, h, '#ffb020');
     this.hotCues.forEach((c, i) => {
       if (c == null) return;
       const x = (c - t0) * pps;
@@ -584,23 +664,20 @@ class Deck {
 
   _drawOverview(pos) {
     const { g, w, h } = this._sizeCanvas(this.overCv);
-    g.fillStyle = '#0a0c11'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#07080b'; g.fillRect(0, 0, w, h);
     if (!this.buffer) return;
     const dpr = window.devicePixelRatio || 1;
     const cv = this.overCv;
+    const bins = this.bands ? this.bands.low.length : this.peaks.length;
     if (!this.overviewCache || this.overviewCache.width !== cv.width || this.overviewCache.height !== cv.height) {
       const oc = document.createElement('canvas');
       oc.width = cv.width; oc.height = cv.height;
       const og = oc.getContext('2d');
       og.setTransform(dpr, 0, 0, dpr, 0, 0);
-      og.fillStyle = this.color;
-      const bpp = this.peaks.length / w;
+      const bpp = bins / w;
       for (let x = 0; x < w; x++) {
         const a = Math.floor(x * bpp), b = Math.max(a + 1, Math.floor((x + 1) * bpp));
-        let m = 0;
-        for (let i = a; i < b; i++) { const v = this.peaks[i] || 0; if (v > m) m = v; }
-        const hh = Math.max(0.5, m * h * 0.45);
-        og.fillRect(x, h / 2 - hh, 1, hh * 2);
+        this._columnMax(og, x, h / 2, h, a, b, 1);
       }
       this.overviewCache = oc;
     }
@@ -611,7 +688,7 @@ class Deck {
       g.fillStyle = 'rgba(255,255,255,.2)';
       g.fillRect(this.loop.start / this.duration * w, 0, (this.loop.end - this.loop.start) / this.duration * w, h);
     }
-    this._marker(g, this.cuePoint / this.duration * w, h, '#f59e0b');
+    this._marker(g, this.cuePoint / this.duration * w, h, '#ffb020');
     this.hotCues.forEach((c, i) => { if (c != null) this._marker(g, c / this.duration * w, h, HOT_COLORS[i]); });
     g.fillStyle = '#fff'; g.fillRect(px - 1, 0, 2, h);
   }

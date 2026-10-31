@@ -1,4 +1,4 @@
-/* Punto de entrada: crea los decks, el mixer, la biblioteca, atajos de teclado y grabación. */
+/* Punto de entrada: decks, mixer, colección, navegador, Spotify, Automix, teclado y grabación. */
 (() => {
   const $ = s => document.querySelector(s);
 
@@ -12,39 +12,49 @@
   }
 
   /* ---- Decks y mixer ---- */
-  const deckA = new Deck('A', $('#deck-a'), {
-    color: '#22d3ee',
-    keyHint: 'Q play · W cue · E sync · R loop · 1-4 hot cues',
+  const deckOpts = id => ({
+    color: id === 'A' ? '#19c4ff' : '#ff5a7a',
+    keyHint: id === 'A' ? 'Q play · W cue · E sync · R loop · 1-4 hot cues' : 'P play · O cue · I sync · U loop · 7-0 hot cues',
+    zoomMount: $(id === 'A' ? '#wave-a' : '#wave-b'),
     onLoadRequest: handleLoadRequest,
     onBpmEdit: (track, bpm) => Library.updateBpm(track, bpm),
     onNotice: toast,
-    onPlay: () => SpotifyLink.pause(),
+    onPlay: () => { SpotifyLink.pause(); Library.render(); },
     onEnded: d => Automix.onDeckEnded(d.id)
   });
-  const deckB = new Deck('B', $('#deck-b'), {
-    color: '#fb7185',
-    keyHint: 'P play · O cue · I sync · U loop · 7-0 hot cues',
-    onLoadRequest: handleLoadRequest,
-    onBpmEdit: (track, bpm) => Library.updateBpm(track, bpm),
-    onNotice: toast,
-    onPlay: () => SpotifyLink.pause(),
-    onEnded: d => Automix.onDeckEnded(d.id)
-  });
+  const deckA = new Deck('A', $('#deck-a'), deckOpts('A'));
+  const deckB = new Deck('B', $('#deck-b'), deckOpts('B'));
   deckA.getOther = () => deckB;
   deckB.getOther = () => deckA;
   Mixer.build($('#mixer'), deckA, deckB);
   const decks = { A: deckA, B: deckB };
 
-  /* ---- Biblioteca ---- */
+  /* Deck "maestro" para la compatibilidad de tonalidad: el que suena, o el que tiene pista. */
+  function masterDeck() {
+    if (deckA.playing) return deckA;
+    if (deckB.playing) return deckB;
+    return deckA.track ? deckA : deckB.track ? deckB : null;
+  }
+  function idleDeck() {
+    if (!deckA.playing && !deckA.track) return 'A';
+    if (!deckB.playing && !deckB.track) return 'B';
+    if (!deckA.playing) return 'A';
+    if (!deckB.playing) return 'B';
+    return null;
+  }
+
+  /* ---- Colección ---- */
   async function loadTrack(track, deckId) {
+    if (deckId === 'auto') deckId = idleDeck();
     const deck = decks[deckId];
-    if (!track || !deck) return;
+    if (!track || !deck) { if (track) toast('Los dos decks están sonando. Pausa uno para cargar ahí.'); return; }
     deck.setLoading(track);
     try {
       const buf = await Library.decode(track);
       if (!track.duration) track.duration = buf.duration;
       deck.load(track, buf);
-      if (track.analyzing) toast('Pista cargada en ' + deckId + '. El BPM aparecerá cuando termine el análisis.');
+      if (track.analyzing) toast('Pista cargada en ' + deckId + '. El análisis se completará en segundo plano.');
+      Library.render();
     } catch (e) {
       console.error(e);
       deck.setError('No se pudo decodificar "' + track.name + '"');
@@ -62,25 +72,17 @@
   }
   Library.on('load', (track, deckId) => { if (deckId === 'Q') Automix.add([track.id]); else loadTrack(track, deckId); });
   Library.on('change', rec => {
-    for (const d of [deckA, deckB]) if (d.track && d.track.id === rec.id) d.setBpm(rec.bpm, rec.firstBeat);
+    for (const d of [deckA, deckB]) if (d.track && d.track.id === rec.id) d.applyAnalysis(rec);
     SpotifyLink.refreshMatches();
+    updateTree();
   });
-  Library.init({ tbody: $('#lib-body'), status: $('#lib-status') }).then(() => { SpotifyLink.refreshMatches(); Automix.libraryReady(); });
-
-  /* ---- Spotify ---- */
-  SpotifyLink.build($('#spotify'), {
-    toast,
-    locals: () => Library.tracks,
-    loadLocal: (id, deckId) => loadTrack(Library.get(id), deckId),
-    queueLocal: ids => { const n = Automix.add(ids); toast(n ? n + (n === 1 ? ' pista agregada' : ' pistas agregadas') + ' a la cola de Automix.' : 'Esas pistas ya están en la cola.'); },
-    onSpotifyPlaying: () => { if (Automix.running) Automix.stop(); deckA.pause(); deckB.pause(); }
-  });
-
-  /* ---- Automix ---- */
-  Automix.build($('#automix'), { toast, loadTrack }, decks, Library);
+  Library.init({
+    tbody: $('#lib-body'), status: $('#lib-status'), search: $('#lib-search'), count: $('#lib-count'),
+    hooks: { masterCamelot: () => { const d = masterDeck(); return d && d.track ? d.track.camelot : null; } }
+  }).then(() => { SpotifyLink.refreshMatches(); Automix.libraryReady(); updateTree(); });
 
   const fileInput = $('#file-input');
-  fileInput.addEventListener('change', () => { Library.addFiles(fileInput.files); fileInput.value = ''; SpotifyLink.refreshMatches(); });
+  fileInput.addEventListener('change', () => { Library.addFiles(fileInput.files); fileInput.value = ''; SpotifyLink.refreshMatches(); updateTree(); });
   const dz = $('#dropzone');
   dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('over'); });
   dz.addEventListener('dragleave', () => dz.classList.remove('over'));
@@ -88,17 +90,39 @@
     e.preventDefault(); dz.classList.remove('over');
     const added = Library.addFiles(e.dataTransfer.files);
     if (!added.length) toast('No encontré archivos de audio en lo que soltaste.');
+    updateTree();
   });
   $('#lib-clear').addEventListener('click', () => {
     if (!Library.tracks.length) return;
-    if (confirm('¿Vaciar la biblioteca? Las pistas cargadas en los decks siguen sonando.')) Library.clear();
+    if (confirm('¿Vaciar la colección? Las pistas cargadas en los decks siguen sonando.')) Library.clear().then(updateTree);
   });
+
+  /* ---- Navegador (árbol lateral) ---- */
+  document.querySelectorAll('.tree-item').forEach(btn => btn.addEventListener('click', () => {
+    document.querySelectorAll('.tree-item').forEach(b => b.classList.toggle('active', b === btn));
+    document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + btn.dataset.panel || p.id === btn.dataset.panel));
+  }));
+  function updateTree() {
+    $('#tree-count').textContent = Library.tracks.length || '';
+    $('#tree-queue').textContent = Automix.queue.length || '';
+  }
+
+  /* ---- Spotify ---- */
+  SpotifyLink.build($('#spotify'), {
+    toast,
+    locals: () => Library.tracks,
+    loadLocal: (id, deckId) => loadTrack(Library.get(id), deckId),
+    queueLocal: ids => { const n = Automix.add(ids); toast(n ? n + (n === 1 ? ' pista agregada' : ' pistas agregadas') + ' a la cola de Automix.' : 'Esas pistas ya están en la cola.'); updateTree(); },
+    onSpotifyPlaying: () => { if (Automix.running) Automix.stop(); deckA.pause(); deckB.pause(); }
+  });
+
+  /* ---- Automix ---- */
+  Automix.build($('#automix'), { toast, loadTrack, onChange: updateTree }, decks, Library);
 
   /* ---- Master, grabación, ayuda ---- */
   $('#master-vol').addEventListener('input', e => {
     Engine.master.gain.setTargetAtTime(parseFloat(e.target.value), Engine.ctx.currentTime, 0.01);
   });
-
   const recBtn = $('#rec-btn'), recLink = $('#rec-link');
   let recStart = 0;
   recBtn.addEventListener('click', async () => {
@@ -117,15 +141,13 @@
       const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
       recLink.href = URL.createObjectURL(blob);
       recLink.download = 'mix-' + stamp + '.' + ext;
-      recLink.textContent = '⬇ Descargar mezcla (' + Library.fmt((Date.now() - recStart) / 1000) + ')';
+      recLink.textContent = '⬇ Mezcla (' + Library.fmt((Date.now() - recStart) / 1000) + ')';
       recLink.classList.remove('hidden');
     }
   });
-
   const help = $('#help');
   $('#help-btn').addEventListener('click', () => help.showModal());
   $('#help-close').addEventListener('click', () => help.close());
-
   document.addEventListener('pointerdown', () => Engine.resume(), { once: true });
 
   /* ---- Teclado ---- */
@@ -139,7 +161,6 @@
   };
   const typing = t => t && (t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable ||
     (t.tagName === 'INPUT' && t.type !== 'range'));
-
   document.addEventListener('keydown', e => {
     if (typing(e.target) || help.open) return;
     if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
@@ -195,23 +216,34 @@
     for (let i = 0; i < segs; i++) {
       const lit = mvu.level >= (i + 1) / segs - 1 / segs / 2;
       g.globalAlpha = lit ? 1 : 0.15;
-      g.fillStyle = i >= segs - 3 ? '#ef4444' : i >= segs - 7 ? '#facc15' : '#4ade80';
+      g.fillStyle = i >= segs - 3 ? '#ff3b3b' : i >= segs - 7 ? '#ffc400' : '#39d353';
       g.fillRect(i * (sw + gap), 0, sw, h);
     }
     g.globalAlpha = 1;
     if (mvu.peak > 0.02) { g.fillStyle = '#fff'; g.fillRect(Math.min(w - 2, mvu.peak * w - 1), 0, 2, h); }
   }
-
+  const leds = { A: Array.from($('#leds-a').children), B: Array.from($('#leds-b').children) };
+  const bars = { A: $('#bar-a'), B: $('#bar-b') };
+  function drawBeats(id) {
+    const info = decks[id].beatInfo();
+    const b = info ? Math.floor(info.beat) : -1;
+    leds[id].forEach((el, i) => el.classList.toggle('on', i === b));
+    bars[id].textContent = info ? (info.bar + 1) + '.' + (b + 1) : '—';
+  }
+  const topStatus = $('#top-status');
   function frame() {
     Automix.tick();
     deckA.draw();
     deckB.draw();
     Mixer.draw();
     drawMaster();
+    drawBeats('A'); drawBeats('B');
     if (Engine.recording) recBtn.textContent = '■ ' + Library.fmt((Date.now() - recStart) / 1000);
+    const m = masterDeck();
+    topStatus.textContent = m && m.track ? 'MASTER · DECK ' + m.id + ' · ' + (m.effectiveBpm() ? m.effectiveBpm().toFixed(1) + ' BPM' : '— BPM') + (m.track.camelot ? ' · ' + m.track.camelot + ' ' + m.track.key : '') : '';
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
 
-  window.MixDeck = { deckA, deckB, Library, Engine, Mixer, SpotifyLink, Automix };
+  window.MixDeck = { deckA, deckB, Library, Engine, Mixer, SpotifyLink, Automix, Analyzer };
 })();

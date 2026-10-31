@@ -5,16 +5,17 @@ const Automix = (() => {
   const KEY = 'mixdeck.automix';
   const EASE_MS = 8000;
   let decks = null, lib = null;
-  const hooks = { toast() {}, loadTrack: () => Promise.resolve() };
+  const hooks = { toast() {}, loadTrack: () => Promise.resolve(), onChange() {} };
   const el = {};
 
   let queue = [];   // [{ id, played }]
   let libReady = false;
-  const settings = { beats: 16, sync: true, bassSwap: true, keepTempo: false, skipSilence: true };
+  const settings = { beats: 16, sync: true, bassSwap: true, keepTempo: false, skipSilence: true, useCues: true };
   const st = { running: false, active: null, current: null, next: null, loading: null, transition: null, ease: null };
 
   /* ---------- Persistencia ---------- */
   function save() {
+    hooks.onChange();
     try { localStorage.setItem(KEY, JSON.stringify({ queue: queue.map(q => q.id), settings })); } catch (e) { /* sin espacio */ }
   }
   function restore() {
@@ -122,9 +123,14 @@ const Automix = (() => {
     const t = settings.skipSilence ? deck.audioStart || 0 : 0;
     return Math.min(deck.beatAtOrAfter(t, true), Math.max(0, deck.duration - 1));
   }
+  /* Punto de salida: el outro detectado por el análisis, o el final del audio. */
   function endPosition(deck) {
-    return settings.skipSilence && deck.audioEnd ? deck.audioEnd : deck.duration;
+    const cues = deck.track && deck.track.cues;
+    const end = settings.skipSilence && deck.audioEnd ? deck.audioEnd : deck.duration;
+    if (settings.useCues && cues && cues.outro && cues.outro < end) return Math.min(end, cues.outro + transitionSecondsRaw(deck));
+    return end;
   }
+  function transitionSecondsRaw(deck) { return settings.beats * 60 / (deck.effectiveBpm() || 120); }
   function transitionSeconds(deck) {
     const bpm = deck.effectiveBpm() || 120;
     const s = settings.beats * 60 / bpm;
@@ -265,6 +271,7 @@ const Automix = (() => {
         '<label><input type="checkbox" class="am-bass"' + (settings.bassSwap ? ' checked' : '') + '> Intercambio de graves</label>' +
         '<label><input type="checkbox" class="am-skipsil"' + (settings.skipSilence ? ' checked' : '') + '> Saltar silencios</label>' +
         '<label><input type="checkbox" class="am-keep"' + (settings.keepTempo ? ' checked' : '') + '> Mantener el tempo igualado</label>' +
+        '<label><input type="checkbox" class="am-cues"' + (settings.useCues ? ' checked' : '') + '> Mezclar en el outro detectado</label>' +
       '</div>' +
       '<div class="am-tools">' +
         '<button class="btn ghost am-all">+ Toda la biblioteca</button>' +
@@ -286,6 +293,7 @@ const Automix = (() => {
     q('.am-bass').addEventListener('change', e => { settings.bassSwap = e.target.checked; save(); });
     q('.am-skipsil').addEventListener('change', e => { settings.skipSilence = e.target.checked; save(); });
     q('.am-keep').addEventListener('change', e => { settings.keepTempo = e.target.checked; save(); });
+    q('.am-cues').addEventListener('change', e => { settings.useCues = e.target.checked; save(); });
     q('.am-all').addEventListener('click', () => {
       const ids = lib.tracks.filter(t => !t.error && !queue.some(x => x.id === t.id)).map(t => t.id);
       if (!add(ids)) hooks.toast('No hay pistas nuevas que agregar.');
@@ -329,8 +337,8 @@ const Automix = (() => {
       const cls = q === st.current && st.running ? 'active' : q === st.next ? 'next' : q.played ? 'played' : '';
       return '<li class="' + cls + '" data-i="' + i + '">' +
         '<span class="am-n">' + (i + 1) + '</span>' +
-        '<span class="am-name" title="' + esc(t.name) + '">' + esc(t.name) + '</span>' +
-        '<span class="am-meta">' + (t.bpm ? t.bpm + ' bpm' : '— bpm') + ' · ' + lib.fmt(t.duration || 0) + '</span>' +
+        '<span class="am-name" title="' + esc(t.name) + '">' + esc(t.name) + (t.artist ? ' <small>' + esc(t.artist) + '</small>' : '') + '</span>' +
+        '<span class="am-meta">' + (t.bpm ? t.bpm + ' bpm' : '— bpm') + (t.camelot ? ' · ' + t.camelot : '') + ' · ' + lib.fmt(t.duration || 0) + '</span>' +
         '<span class="am-state">' + state + '</span>' +
         '<button data-act="up" title="Subir">↑</button><button data-act="down" title="Bajar">↓</button><button data-act="del" title="Quitar">×</button>' +
       '</li>';

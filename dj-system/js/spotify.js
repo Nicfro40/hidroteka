@@ -160,7 +160,7 @@ const SpotifyLink = (() => {
     const artists = track.artists.map(norm).filter(a => a.length >= 2);
     let best = null, bestScore = 0;
     for (const l of locals) {
-      const n = norm(l.name);
+      const n = norm((l.artist ? l.artist + ' ' : '') + l.name);
       if (!n.includes(title)) continue;
       let score = 0;
       if (n === title) score = 2;
