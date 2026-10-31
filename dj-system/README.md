@@ -3,6 +3,14 @@
 Prototipo funcional de un sistema de DJ que corre completo en el navegador, sin servidor ni dependencias.
 Está hecho con HTML, CSS y JavaScript puro sobre la Web Audio API.
 
+## Capturas
+
+![Pantalla principal](screenshots/01-principal.png)
+
+| Automix | Spotify |
+| --- | --- |
+| ![Automix](screenshots/02-automix.png) | ![Spotify](screenshots/03-spotify.png) |
+
 ## Cómo probarlo
 
 Abre `index.html` directamente en Chrome, Edge o Firefox recientes. Si prefieres servirlo:
