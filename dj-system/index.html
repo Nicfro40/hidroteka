@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MIXDECK | Software DJ en el navegador</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">MIX<span>DECK</span><em>PRO</em></div>
+    <div class="top-status" id="top-status"></div>
+    <div class="master">
+      <label for="master-vol">MASTER</label>
+      <input type="range" id="master-vol" min="0" max="1" step="0.01" value="0.9" title="Volumen master">
+      <canvas id="master-vu"></canvas>
+      <button id="rec-btn" class="btn rec" title="Grabar la mezcla (salida master)">● REC</button>
+      <a id="rec-link" class="rec-link hidden" href="#" download>Descargar mezcla</a>
+    </div>
+    <button id="help-btn" class="btn ghost" title="Atajos de teclado (?)">? Atajos</button>
+  </header>
+
+  <main class="studio">
+    <section class="waves" aria-label="Formas de onda">
+      <div class="wave-row" data-deck="A">
+        <div class="wave-side">
+          <span class="wave-tag tag-a">A</span>
+          <div class="beat-leds" id="leds-a"><i></i><i></i><i></i><i></i></div>
+          <span class="bar-count" id="bar-a">—</span>
+        </div>
+        <div class="wave-slot" id="wave-a"></div>
+      </div>
+      <div class="wave-row" data-deck="B">
+        <div class="wave-side">
+          <span class="wave-tag tag-b">B</span>
+          <div class="beat-leds" id="leds-b"><i></i><i></i><i></i><i></i></div>
+          <span class="bar-count" id="bar-b">—</span>
+        </div>
+        <div class="wave-slot" id="wave-b"></div>
+      </div>
+    </section>
+
+    <section class="console">
+      <section class="deck" id="deck-a" aria-label="Deck A"></section>
+      <section class="mixer" id="mixer" aria-label="Mezclador"></section>
+      <section class="deck" id="deck-b" aria-label="Deck B"></section>
+    </section>
+
+    <section class="browser" aria-label="Navegador">
+      <aside class="tree">
+        <div class="tree-title">NAVEGADOR</div>
+        <button class="tree-item active" data-panel="collection"><span class="ti-icon">▤</span>Colección <em id="tree-count"></em></button>
+        <button class="tree-item" data-panel="automix"><span class="ti-icon">⟳</span>Automix <em id="tree-queue"></em></button>
+        <button class="tree-item" data-panel="spotify"><span class="ti-icon sp">●</span>Spotify</button>
+        <div class="tree-sources" id="sources"></div>
+        <div class="tree-foot">
+          <label class="btn primary file-btn">+ Importar pistas
+            <input type="file" id="file-input" accept="audio/*,.mp3,.wav,.ogg,.m4a,.aac,.flac" multiple hidden>
+          </label>
+          <div id="lib-status" class="lib-status"></div>
+        </div>
+      </aside>
+
+      <div class="panels">
+        <section class="panel library active" id="panel-collection" aria-label="Colección">
+          <div class="lib-head">
+            <input id="lib-search" class="search" type="search" placeholder="Buscar en la colección…">
+            <span id="lib-count" class="lib-count"></span>
+            <button id="lib-clear" class="btn ghost">Vaciar</button>
+          </div>
+          <div id="dropzone" class="dropzone">Suelta archivos de audio aquí (o sobre un deck). Se analizan solos: BPM, grilla, tonalidad, ganancia, energía y estructura.</div>
+          <div class="table-wrap">
+            <table class="lib-table">
+              <thead><tr>
+                <th class="t-art"></th>
+                <th data-sort="name">Título</th>
+                <th data-sort="artist">Artista</th>
+                <th data-sort="bpm">BPM</th>
+                <th data-sort="key">Key</th>
+                <th data-sort="duration">Tiempo</th>
+                <th data-sort="energy">Energía</th>
+                <th></th>
+              </tr></thead>
+              <tbody id="lib-body"></tbody>
+            </table>
+          </div>
+        </section>
+        <section class="panel automix" id="automix" aria-label="Automix"></section>
+        <section class="panel spotify" id="spotify" aria-label="Spotify"></section>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="help">
+    <h3>Atajos de teclado</h3>
+    <div class="help-grid">
+      <table>
+        <caption>Deck A</caption>
+        <tr><td><kbd>Q</kbd></td><td>Play / Pause</td></tr>
+        <tr><td><kbd>W</kbd></td><td>Cue (mantener previsualiza)</td></tr>
+        <tr><td><kbd>E</kbd></td><td>Sync con el Deck B</td></tr>
+        <tr><td><kbd>R</kbd></td><td>Loop automático de 4 beats</td></tr>
+        <tr><td><kbd>Z</kbd> <kbd>X</kbd> <kbd>C</kbd></td><td>Loop in / out / salir</td></tr>
+        <tr><td><kbd>A</kbd> <kbd>S</kbd></td><td>Pitch bend − / +</td></tr>
+        <tr><td><kbd>1</kbd>–<kbd>4</kbd></td><td>Hot cues (Shift borra)</td></tr>
+      </table>
+      <table>
+        <caption>Deck B</caption>
+        <tr><td><kbd>P</kbd></td><td>Play / Pause</td></tr>
+        <tr><td><kbd>O</kbd></td><td>Cue (mantener previsualiza)</td></tr>
+        <tr><td><kbd>I</kbd></td><td>Sync con el Deck A</td></tr>
+        <tr><td><kbd>U</kbd></td><td>Loop automático de 4 beats</td></tr>
+        <tr><td><kbd>M</kbd> <kbd>,</kbd> <kbd>.</kbd></td><td>Loop in / out / salir</td></tr>
+        <tr><td><kbd>K</kbd> <kbd>L</kbd></td><td>Pitch bend − / +</td></tr>
+        <tr><td><kbd>7</kbd>–<kbd>0</kbd></td><td>Hot cues (Shift borra)</td></tr>
+      </table>
+    </div>
+    <p><kbd>←</kbd> <kbd>→</kbd> mueven el crossfader. Clic en la onda para saltar. Doble clic en una pista de la colección la carga en el deck libre. Clic en el BPM para corregirlo. Perillas: arrastra vertical, doble clic reinicia, Shift ajusta fino.</p>
+    <p>En <b>Fuentes</b> puedes vincular una carpeta o un pendrive: la app la recuerda, la vuelve a leer al iniciar, analiza las pistas nuevas y marca las que faltan si el pendrive no está conectado (Chrome y Edge de escritorio).</p>
+    <p>El análisis automático marca el CUE en el primer compás, el hot cue 1 en el drop y el hot cue 2 en el inicio del outro. Las tonalidades compatibles con la pista que suena se resaltan en verde.</p>
+    <button id="help-close" class="btn primary">Cerrar</button>
+  </dialog>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="js/engine.js"></script>
+  <script src="js/knob.js"></script>
+  <script src="js/dialogs.js"></script>
+  <script src="js/analyzer.js"></script>
+  <script src="js/tags.js"></script>
+  <script src="js/library.js"></script>
+  <script src="js/sources.js"></script>
+  <script src="js/deck.js"></script>
+  <script src="js/mixer.js"></script>
+  <script src="js/spotify.js"></script>
+  <script src="js/automix.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
