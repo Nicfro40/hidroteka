@@ -37,6 +37,7 @@ class Deck {
     this.onBpmEdit = opts.onBpmEdit || (() => {});
     this.onNotice = opts.onNotice || (() => {});
     this.onPlay = opts.onPlay || (() => {});
+    this.onEnded = opts.onEnded || (() => {});
     this.getOther = opts.getOther || (() => null);
     this.PPS = 100;
     this.ZOOM_SECONDS = 8;
@@ -192,6 +193,7 @@ class Deck {
     this.previewing = false;
     this.pausedPos = this.cuePoint;
     this._renderTransport();
+    this.onEnded(this);
   }
 
   /* CUE estilo CDJ: en reproducción vuelve al cue; en pausa fija el cue o lo previsualiza mientras se mantiene. */
@@ -323,6 +325,7 @@ class Deck {
     this.pause();
     this.track = track; this.buffer = buffer; this.duration = buffer.duration;
     this.peaks = computePeaks(buffer, this.PPS);
+    this._findAudioBounds();
     this.bpm = track.bpm || null; this.firstBeat = track.firstBeat || 0;
     this.pausedPos = 0; this.cuePoint = 0; this.previewing = false;
     this.hotCues = [null, null, null, null];
@@ -334,6 +337,23 @@ class Deck {
     this.mount.classList.add('loaded');
     this._updateDelayTime();
     this._renderBpm(); this._renderTransport(); this._renderHotCues(); this._renderLoop();
+  }
+  /* Primer y último instante con señal audible (umbral ≈ -34 dB), para saltar silencios. */
+  _findAudioBounds() {
+    const P = this.peaks, th = 0.02;
+    let a = 0, b = P.length - 1;
+    while (a < P.length && P[a] < th) a++;
+    while (b > a && P[b] < th) b--;
+    this.audioStart = Math.min(a / this.PPS, this.duration);
+    this.audioEnd = Math.min((b + 1) / this.PPS, this.duration);
+  }
+  /* Posición del primer beat de la grilla igual o posterior a `t` (o `t` si no hay BPM). */
+  beatAtOrAfter(t, barAligned) {
+    if (!this.bpm) return t;
+    const beat = 60 / this.bpm;
+    let k = Math.ceil((t - this.firstBeat) / beat - 1e-6);
+    if (barAligned) k = Math.ceil(k / 4) * 4;
+    return this.firstBeat + k * beat;
   }
   setBpm(bpm, firstBeat) {
     this.bpm = bpm || null;

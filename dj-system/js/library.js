@@ -172,6 +172,7 @@ const Library = (() => {
         '<td class="t-act">' +
           '<button class="load-a" data-act="A" title="Cargar en Deck A">A</button>' +
           '<button class="load-b" data-act="B" title="Cargar en Deck B">B</button>' +
+          '<button class="queue" data-act="Q" title="Agregar a la cola de Automix">+</button>' +
           '<button class="del" data-act="del" title="Quitar de la biblioteca">×</button>' +
         '</td></tr>';
     }).join('');

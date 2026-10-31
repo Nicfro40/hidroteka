@@ -26,6 +26,7 @@
   </main>
 
   <div class="bottom">
+  <section class="automix" id="automix" aria-label="Automix"></section>
   <section class="library" aria-label="Biblioteca">
     <div class="lib-head">
       <h2>Biblioteca</h2>
@@ -40,7 +41,7 @@
     <div id="dropzone" class="dropzone">Arrastra archivos de audio aquí, o directamente sobre un deck. Las pistas quedan guardadas en este navegador.</div>
     <div class="table-wrap">
       <table class="lib-table">
-        <thead><tr><th>Título</th><th>Duración</th><th>BPM</th><th>Cargar</th></tr></thead>
+        <thead><tr><th>Título</th><th>Duración</th><th>BPM</th><th>Cargar / cola</th></tr></thead>
         <tbody id="lib-body"></tbody>
       </table>
     </div>
@@ -86,6 +87,7 @@
   <script src="js/deck.js"></script>
   <script src="js/mixer.js"></script>
   <script src="js/spotify.js"></script>
+  <script src="js/automix.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

@@ -3,6 +3,8 @@ const Mixer = (() => {
   let decks = {};
   let vuCanvases = {};
   let xfInput = null;
+  const knobs = { A: {}, B: {} };
+  const faders = {};
 
   const dbFmt = v => (v > 0 ? '+' : '') + v.toFixed(1) + ' dB';
 
@@ -24,14 +26,14 @@ const Mixer = (() => {
       const deck = decks[id];
       const strip = mount.querySelector('.strip[data-deck="' + id + '"]');
       strip.style.setProperty('--accent', deck.color);
-      const knobs = document.createElement('div');
-      knobs.className = 'strip-knobs';
-      knobs.append(
-        createKnob({ label: 'TRIM', min: -12, max: 12, value: 0, format: dbFmt, onChange: v => deck.setTrim(v) }).el,
-        createKnob({ label: 'HI', min: -24, max: 12, value: 0, format: dbFmt, onChange: v => deck.setEq('high', v) }).el,
-        createKnob({ label: 'MID', min: -24, max: 12, value: 0, format: dbFmt, onChange: v => deck.setEq('mid', v) }).el,
-        createKnob({ label: 'LOW', min: -24, max: 12, value: 0, format: dbFmt, onChange: v => deck.setEq('low', v) }).el
-      );
+      const knobBox = document.createElement('div');
+      knobBox.className = 'strip-knobs';
+      const k = knobs[id];
+      k.trim = createKnob({ label: 'TRIM', min: -12, max: 12, value: 0, format: dbFmt, onChange: v => deck.setTrim(v) });
+      k.high = createKnob({ label: 'HI', min: -24, max: 12, value: 0, format: dbFmt, onChange: v => deck.setEq('high', v) });
+      k.mid = createKnob({ label: 'MID', min: -24, max: 12, value: 0, format: dbFmt, onChange: v => deck.setEq('mid', v) });
+      k.low = createKnob({ label: 'LOW', min: -24, max: 12, value: 0, format: dbFmt, onChange: v => deck.setEq('low', v) });
+      knobBox.append(k.trim.el, k.high.el, k.mid.el, k.low.el);
       const lower = document.createElement('div');
       lower.className = 'strip-lower';
       lower.innerHTML =
@@ -40,9 +42,10 @@ const Mixer = (() => {
       const badge = document.createElement('div');
       badge.className = 'strip-badge';
       badge.textContent = id;
-      strip.append(knobs, lower, badge);
+      strip.append(knobBox, lower, badge);
       vuCanvases[id] = lower.querySelector('.vu');
-      lower.querySelector('.fader').addEventListener('input', e => deck.setFader(parseFloat(e.target.value)));
+      faders[id] = lower.querySelector('.fader');
+      faders[id].addEventListener('input', e => deck.setFader(parseFloat(e.target.value)));
     }
 
     xfInput = mount.querySelector('.xfader');
@@ -57,11 +60,16 @@ const Mixer = (() => {
     decks.A.setCrossfadeGain(a);
     decks.B.setCrossfadeGain(b);
   }
-  function nudgeXf(d) {
-    const v = Math.max(-1, Math.min(1, parseFloat(xfInput.value) + d));
+  function setXf(v) {
+    v = Math.max(-1, Math.min(1, v));
     xfInput.value = v;
     applyXf(v);
   }
+  function getXf() { return parseFloat(xfInput.value); }
+  function nudgeXf(d) { setXf(getXf() + d); }
+  function setEq(id, band, db) { knobs[id][band].set(db); }
+  function getEq(id, band) { return knobs[id][band].value; }
+  function getFader(id) { return parseFloat(faders[id].value); }
 
   function drawVu(cv, level, peak, color) {
     const dpr = window.devicePixelRatio || 1;
@@ -95,5 +103,5 @@ const Mixer = (() => {
     }
   }
 
-  return { build, draw, nudgeXf, drawVu };
+  return { build, draw, nudgeXf, setXf, getXf, setEq, getEq, getFader, drawVu };
 })();

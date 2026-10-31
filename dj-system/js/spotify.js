@@ -18,7 +18,7 @@ const SpotifyLink = (() => {
   let list = { title: '', tracks: [] };
   let player = null, deviceId = null, playerState = null, sdkPromise = null, playerTimer = null;
   let busy = false;
-  const hooks = { toast() {}, locals: () => [], loadLocal() {}, onSpotifyPlaying() {} };
+  const hooks = { toast() {}, locals: () => [], loadLocal() {}, queueLocal() {}, onSpotifyPlaying() {} };
   const el = {};
 
   function safeParse(s) { try { return JSON.parse(s || 'null'); } catch (e) { return null; } }
@@ -367,7 +367,8 @@ const SpotifyLink = (() => {
       const localCell = local
         ? '<span class="sp-have" title="' + esc(local.name) + '">✓</span>' +
           '<button class="load-a" data-act="A" data-i="' + i + '" title="Cargar el archivo local en Deck A">A</button>' +
-          '<button class="load-b" data-act="B" data-i="' + i + '" title="Cargar el archivo local en Deck B">B</button>'
+          '<button class="load-b" data-act="B" data-i="' + i + '" title="Cargar el archivo local en Deck B">B</button>' +
+          '<button class="queue" data-act="Q" data-i="' + i + '" title="Agregar el archivo local a la cola de Automix">+</button>'
         : '<span class="sp-miss" title="No hay un archivo con este título en la biblioteca">—</span>';
       return '<tr>' +
         '<td class="t-name sp-name">' + cover + '<span>' + esc(t.name) + '</span></td>' +
@@ -377,18 +378,25 @@ const SpotifyLink = (() => {
         '<td class="t-act"><button class="sp-play" data-act="play" data-i="' + i + '" title="Escuchar en Spotify (Premium)">▶</button></td>' +
       '</tr>';
     }).join('');
-    summary.textContent = busy ? 'Cargando…'
+    summary.innerHTML = busy ? 'Cargando…'
       : !list.tracks.length ? 'Busca una canción o elige una playlist para armar un setlist.'
-      : (list.title ? list.title + ' · ' : '') + list.tracks.length + ' pistas · ' + have + ' en tu biblioteca';
+      : esc((list.title ? list.title + ' · ' : '') + list.tracks.length + ' pistas · ' + have + ' en tu biblioteca') +
+        (have ? ' <button class="btn ghost sp-queue-all" type="button">+ Encolar las ' + have + ' en Automix</button>' : '');
   }
   function refreshMatches() { if (connected()) renderList(); }
 
   function onBodyClick(e) {
+    if (e.target.closest('.sp-queue-all')) {
+      const ids = list.tracks.filter(t => t.localId).map(t => t.localId);
+      hooks.queueLocal(ids);
+      return;
+    }
     const btn = e.target.closest('button[data-act]');
     if (!btn) return;
     const t = list.tracks[+btn.dataset.i];
     if (!t) return;
     if (btn.dataset.act === 'play') playTrack(t);
+    else if (btn.dataset.act === 'Q') { if (t.localId) hooks.queueLocal([t.localId]); }
     else if (t.localId) hooks.loadLocal(t.localId, btn.dataset.act);
   }
   async function doSearch(q) {

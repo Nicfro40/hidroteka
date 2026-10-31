@@ -26,6 +26,24 @@ El audio se activa con el primer clic en la página (política de autoplay de lo
 - **Grabación de la mezcla** desde el bus master, con descarga en WebM/Opus (u OGG/M4A según el navegador).
 - **Biblioteca** con arrastrar y soltar. Las pistas quedan guardadas en IndexedDB, así que siguen ahí al recargar.
 - **Atajos de teclado** para todo el transporte (botón "? Atajos" o tecla `?`).
+- **Automix**: arma una cola y la app mezcla sola (ver sección siguiente).
+- **Spotify**: búsqueda, playlists como setlists, cruce con la biblioteca local y reproductor (ver más abajo).
+
+## Automix: la música se mezcla sola
+
+Arma una cola con el botón **+** de cada pista (biblioteca o playlist de Spotify que ya tengas como archivo),
+arrastrando filas al panel, o con "+ Toda la biblioteca". Pulsa **▶ Iniciar** y la app:
+
+1. Carga la primera pista en un deck y la siguiente en el otro, saltando el silencio inicial y arrancando en un
+   inicio de compás.
+2. Cuando a la pista le quedan N beats (4 a 64, configurable), iguala el tempo de la siguiente, la arranca alineada
+   a la fase del compás y mueve el crossfader de forma gradual.
+3. Durante la mezcla intercambia los graves: baja los de la pista saliente y sube los de la entrante.
+4. Al terminar, pausa el deck saliente, devuelve la nueva pista a su tempo original en 8 segundos (desactivable con
+   "Mantener el tempo igualado") y prepara la siguiente.
+
+**⏭** salta de inmediato a la siguiente con la misma transición. **■ Detener** deja todo como está sonando y te
+devuelve el control. Automix solo mueve el crossfader y los graves; deja los faders de canal arriba.
 
 ## Conexión con Spotify
 
@@ -72,6 +90,7 @@ dj-system/
     ├── deck.js     Reproducción, cue, loops, pitch, sync, FX, dibujo
     ├── mixer.js    Strips de canal, medidores, crossfader
     ├── spotify.js  OAuth PKCE, búsqueda, playlists, cruce con biblioteca, reproductor
+    ├── automix.js  Cola y transiciones automáticas
     └── app.js      Wiring, teclado, grabación, ayuda
 ```
 

@@ -18,7 +18,8 @@
     onLoadRequest: handleLoadRequest,
     onBpmEdit: (track, bpm) => Library.updateBpm(track, bpm),
     onNotice: toast,
-    onPlay: () => SpotifyLink.pause()
+    onPlay: () => SpotifyLink.pause(),
+    onEnded: d => Automix.onDeckEnded(d.id)
   });
   const deckB = new Deck('B', $('#deck-b'), {
     color: '#fb7185',
@@ -26,7 +27,8 @@
     onLoadRequest: handleLoadRequest,
     onBpmEdit: (track, bpm) => Library.updateBpm(track, bpm),
     onNotice: toast,
-    onPlay: () => SpotifyLink.pause()
+    onPlay: () => SpotifyLink.pause(),
+    onEnded: d => Automix.onDeckEnded(d.id)
   });
   deckA.getOther = () => deckB;
   deckB.getOther = () => deckA;
@@ -58,20 +60,24 @@
       loadTrack(Library.get(payload.id), deckId);
     }
   }
-  Library.on('load', (track, deckId) => loadTrack(track, deckId));
+  Library.on('load', (track, deckId) => { if (deckId === 'Q') Automix.add([track.id]); else loadTrack(track, deckId); });
   Library.on('change', rec => {
     for (const d of [deckA, deckB]) if (d.track && d.track.id === rec.id) d.setBpm(rec.bpm, rec.firstBeat);
     SpotifyLink.refreshMatches();
   });
-  Library.init({ tbody: $('#lib-body'), status: $('#lib-status') }).then(() => SpotifyLink.refreshMatches());
+  Library.init({ tbody: $('#lib-body'), status: $('#lib-status') }).then(() => { SpotifyLink.refreshMatches(); Automix.libraryReady(); });
 
   /* ---- Spotify ---- */
   SpotifyLink.build($('#spotify'), {
     toast,
     locals: () => Library.tracks,
     loadLocal: (id, deckId) => loadTrack(Library.get(id), deckId),
-    onSpotifyPlaying: () => { deckA.pause(); deckB.pause(); }
+    queueLocal: ids => { const n = Automix.add(ids); toast(n ? n + (n === 1 ? ' pista agregada' : ' pistas agregadas') + ' a la cola de Automix.' : 'Esas pistas ya están en la cola.'); },
+    onSpotifyPlaying: () => { if (Automix.running) Automix.stop(); deckA.pause(); deckB.pause(); }
   });
+
+  /* ---- Automix ---- */
+  Automix.build($('#automix'), { toast, loadTrack }, decks, Library);
 
   const fileInput = $('#file-input');
   fileInput.addEventListener('change', () => { Library.addFiles(fileInput.files); fileInput.value = ''; SpotifyLink.refreshMatches(); });
@@ -197,6 +203,7 @@
   }
 
   function frame() {
+    Automix.tick();
     deckA.draw();
     deckB.draw();
     Mixer.draw();
@@ -206,5 +213,5 @@
   }
   requestAnimationFrame(frame);
 
-  window.MixDeck = { deckA, deckB, Library, Engine, Mixer, SpotifyLink };
+  window.MixDeck = { deckA, deckB, Library, Engine, Mixer, SpotifyLink, Automix };
 })();
