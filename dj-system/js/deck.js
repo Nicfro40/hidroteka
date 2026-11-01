@@ -92,7 +92,12 @@ class Deck {
     this.fxSum.connect(this.trim); this.trim.connect(this.fader); this.fader.connect(this.xf);
     this.xf.connect(Engine.master);
     this.fader.connect(this.analyser);
+    /* Pre-escucha: toma la señal antes del fader y la manda al bus de auriculares. */
+    this.cueSend = c.createGain(); this.cueSend.gain.value = 0;
+    this.trim.connect(this.cueSend); this.cueSend.connect(Engine.cueBus);
+    this.pfl = false;
   }
+  setPfl(on) { this.pfl = !!on; this.cueSend.gain.setTargetAtTime(this.pfl ? 1 : 0, this.ctx.currentTime, 0.01); }
 
   setTrim(db) { this.trim.gain.setTargetAtTime(Engine.dbToGain(db), this.ctx.currentTime, 0.02); }
   setEq(band, db) {

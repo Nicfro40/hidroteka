@@ -111,7 +111,9 @@ const SpotifyLink = (() => {
     const data = await r.json().catch(() => null);
     if (!r.ok) {
       if (r.status === 401) logout();
-      throw new Error((data && data.error && (data.error.message || data.error)) || ('HTTP ' + r.status));
+      let msg = (data && data.error && (data.error.message || data.error)) || ('HTTP ' + r.status);
+      if (r.status === 403) msg += ' (tu app de Spotify está en modo desarrollo: agrega tu cuenta en User Management del dashboard)';
+      throw new Error(msg);
     }
     return data;
   }
@@ -140,7 +142,7 @@ const SpotifyLink = (() => {
     return items.map(p => ({ id: p.id, name: p.name, total: p.tracks ? p.tracks.total : 0 }));
   }
   async function playlistTracks(id) {
-    let items = [], url = '/playlists/' + id + '/tracks?limit=100&fields=next,items(track(id,uri,name,duration_ms,artists(name),album(name,images)))';
+    let items = [], url = '/playlists/' + id + '/tracks?limit=50&fields=next,items(track(id,uri,name,duration_ms,artists(name),album(name,images)))';
     while (url && items.length < 500) {
       const d = await api(url);
       items = items.concat((d.items || []).map(i => i && i.track).filter(t => t && t.id));
@@ -148,9 +150,16 @@ const SpotifyLink = (() => {
     }
     return items.map(simplify);
   }
+  /* Spotify limita la búsqueda a 10 resultados por petición: pedimos hasta 3 páginas. */
   async function search(q) {
-    const d = await api('/search?type=track&limit=30&q=' + encodeURIComponent(q));
-    return ((d.tracks && d.tracks.items) || []).map(simplify);
+    let items = [];
+    for (let offset = 0; offset < 30; offset += 10) {
+      const d = await api('/search?type=track&limit=10&offset=' + offset + '&q=' + encodeURIComponent(q));
+      const page = (d.tracks && d.tracks.items) || [];
+      items = items.concat(page);
+      if (page.length < 10) break;
+    }
+    return items.map(simplify);
   }
 
   /* ---------- Cruce con la biblioteca local ---------- */

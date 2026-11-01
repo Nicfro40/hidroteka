@@ -334,3 +334,51 @@ dialog p { color: var(--muted); font-size: .84rem; line-height: 1.5; }
 .t-src { color: var(--muted); font-size: .7rem; margin-right: 6px; }
 .row-missing td { opacity: .45; }
 .row-missing .t-src { color: var(--rec); opacity: 1; }
+
+/* ---------- Pre-escucha ---------- */
+.pfl { padding: 4px 6px; font-size: .68rem; width: 100%; }
+.pfl.on { background: var(--ok); border-color: var(--ok); color: #0a0c11; box-shadow: 0 0 10px rgba(57,211,83,.5); }
+.phones-wrap { display: flex; justify-content: center; padding-top: 4px; }
+
+/* ---------- Controladora MIDI ---------- */
+.midi-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.midi-head h2 { margin: 0; font-size: .95rem; letter-spacing: .08em; }
+.midi-status { color: var(--muted); font-size: .82rem; flex: 1; }
+.midi-status::before { content: "●"; margin-right: 6px; color: #3a3f4d; }
+.midi-status.blink::before { color: var(--ok); text-shadow: 0 0 8px var(--ok); }
+.midi-audio, .midi-tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 10px; font-size: .82rem; color: var(--muted); }
+.midi-audio label, .midi-tools label { display: flex; align-items: center; gap: 6px; }
+.midi-audio select, .midi-tools select { background: #0d0f14; color: var(--text); border: 1px solid var(--line-2); border-radius: 4px; padding: 5px 8px; max-width: 320px; }
+.out-status { font-size: .76rem; }
+.midi-hint { color: var(--muted); font-size: .78rem; margin: 10px 0 8px; line-height: 1.5; }
+.midi-wrap { max-height: 380px; }
+.midi-table td { padding: 4px 8px; }
+.midi-group td { background: var(--bg-2); color: var(--muted); font-size: .66rem; letter-spacing: .14em; text-transform: uppercase; padding: 6px 8px; }
+.midi-table tr.mapped .midi-key { color: var(--ok); font-family: var(--mono); font-size: .78rem; }
+.midi-table tr.learning { background: color-mix(in srgb, var(--warn) 12%, transparent); }
+.midi-table tr.learning .midi-key { color: var(--warn); font-style: italic; }
+.midi-key { color: var(--muted); font-size: .78rem; }
+.midi-table select { background: #0d0f14; color: var(--text); border: 1px solid var(--line-2); border-radius: 3px; padding: 2px 4px; font-size: .76rem; }
+.midi-table button.on { background: var(--warn); color: #0a0c11; border-color: var(--warn); }
+.lib-table tr.selected td { background: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: inset 2px 0 0 var(--accent); }
+
+/* ---------- Google Drive ---------- */
+.ti-icon.gd { color: #fbbc04; }
+.gd-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.gd-head h2 { margin: 0; font-size: .95rem; letter-spacing: .08em; display: flex; align-items: center; gap: 8px; }
+.gd-logo { color: #fbbc04; }
+.gd-status { color: var(--muted); font-size: .82rem; flex: 1; }
+.gd-actions { display: flex; gap: 8px; }
+.gdrive .btn.primary { background: #4285f4; border-color: #4285f4; color: #fff; }
+.gd-body { margin-top: 10px; }
+.gd-crumbs { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: .84rem; margin-bottom: 8px; }
+.gd-crumbs button { background: none; border: 1px solid transparent; color: var(--text); cursor: pointer; padding: 3px 7px; border-radius: 4px; font-weight: 600; }
+.gd-crumbs button:hover { background: var(--panel-2); }
+.gd-root { color: var(--muted) !important; }
+.gd-sep { color: var(--muted); }
+.gd-current { margin: 6px 0 10px; }
+.gd-linked { color: var(--ok); font-weight: 700; font-size: .8rem; }
+.gd-wrap { max-height: 320px; }
+.gd-open { background: none; border: 0; color: var(--text); cursor: pointer; font: inherit; font-weight: 600; padding: 0; text-align: left; }
+.gd-open:hover { color: var(--accent); }
+.gd-table .t-name { max-width: 0; width: 70%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

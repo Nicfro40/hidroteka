@@ -52,6 +52,8 @@
         <button class="tree-item active" data-panel="collection"><span class="ti-icon">▤</span>Colección <em id="tree-count"></em></button>
         <button class="tree-item" data-panel="automix"><span class="ti-icon">⟳</span>Automix <em id="tree-queue"></em></button>
         <button class="tree-item" data-panel="spotify"><span class="ti-icon sp">●</span>Spotify</button>
+        <button class="tree-item" data-panel="gdrive"><span class="ti-icon gd">▲</span>Google Drive</button>
+        <button class="tree-item" data-panel="midi"><span class="ti-icon">⌘</span>Controladora</button>
         <div class="tree-sources" id="sources"></div>
         <div class="tree-foot">
           <label class="btn primary file-btn">+ Importar pistas
@@ -87,6 +89,8 @@
         </section>
         <section class="panel automix" id="automix" aria-label="Automix"></section>
         <section class="panel spotify" id="spotify" aria-label="Spotify"></section>
+        <section class="panel gdrive" id="gdrive" aria-label="Google Drive"></section>
+        <section class="panel midi" id="midi" aria-label="Controladora MIDI"></section>
       </div>
     </section>
   </main>
@@ -116,6 +120,8 @@
       </table>
     </div>
     <p><kbd>←</kbd> <kbd>→</kbd> mueven el crossfader. Clic en la onda para saltar. Doble clic en una pista de la colección la carga en el deck libre. Clic en el BPM para corregirlo. Perillas: arrastra vertical, doble clic reinicia, Shift ajusta fino.</p>
+    <p>En <b>Google Drive</b> inicias sesión con tu cuenta de Google y vinculas carpetas (por ejemplo, las que te comparten): la app descarga y analiza las canciones sola, en segundo plano, y quedan guardadas en el navegador.</p>
+    <p>En <b>Controladora</b> conectas cualquier controladora MIDI por USB y asignas sus controles con "Aprender"; ahí también eliges la tarjeta de sonido y, si tiene 4 canales, la pre-escucha sale por los canales 3-4 con los botones 🎧 CUE del mixer.</p>
     <p>En <b>Fuentes</b> puedes vincular una carpeta o un pendrive: la app la recuerda, la vuelve a leer al iniciar, analiza las pistas nuevas y marca las que faltan si el pendrive no está conectado (Chrome y Edge de escritorio).</p>
     <p>El análisis automático marca el CUE en el primer compás, el hot cue 1 en el drop y el hot cue 2 en el inicio del outro. Las tonalidades compatibles con la pista que suena se resaltan en verde.</p>
     <button id="help-close" class="btn primary">Cerrar</button>
@@ -129,11 +135,13 @@
   <script src="js/analyzer.js"></script>
   <script src="js/tags.js"></script>
   <script src="js/library.js"></script>
+  <script src="js/gdrive.js"></script>
   <script src="js/sources.js"></script>
   <script src="js/deck.js"></script>
   <script src="js/mixer.js"></script>
   <script src="js/spotify.js"></script>
   <script src="js/automix.js"></script>
+  <script src="js/midi.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

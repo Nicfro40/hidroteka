@@ -48,9 +48,45 @@ Cada pista que importas se analiza sola, en segundo plano, y el resultado queda 
 - **Grabación de la mezcla** desde el bus master, con descarga en WebM/Opus (u OGG/M4A según el navegador).
 - **Navegador** con árbol lateral (Colección, Automix, Spotify, Fuentes), columnas ordenables, búsqueda, carátulas y doble clic para cargar en el deck libre. Las pistas quedan guardadas en IndexedDB.
 - **Pendrive y carpetas vinculadas**: la app recuerda la carpeta, la relee al iniciar y detecta pistas nuevas o faltantes (ver abajo).
+- **Controladoras MIDI**: cualquier controladora USB con modo Aprender, luces y pre-escucha por auriculares (ver abajo).
+- **Google Drive**: sesión con tu cuenta de Google y carpetas compartidas vinculadas que se descargan y analizan solas (ver abajo).
 - **Atajos de teclado** para todo el transporte (botón "? Atajos" o tecla `?`).
 - **Automix**: arma una cola y la app mezcla sola (ver sección siguiente).
 - **Spotify**: búsqueda, playlists como setlists, cruce con la biblioteca local y reproductor (ver más abajo).
+
+## Google Drive
+
+Cuando te comparten carpetas con música por Drive, no hace falta descargarlas a mano. En **Google Drive**:
+
+1. Pulsa ⚙ y sigue los pasos para crear un ID de cliente de Google (gratis; la app solo pide permiso de lectura).
+2. **Conectar con Google**: inicias sesión con tu cuenta. La sesión se renueva sola mientras la cuenta siga abierta.
+3. Navega **Compartidos conmigo** o **Mi unidad** y pulsa **Vincular** en una carpeta. Aparece en **Fuentes** con el icono ▲.
+4. La app descarga y analiza las canciones **en segundo plano** (verás "descargando" en el estado de la colección) y
+   guarda una copia en el navegador: después cargan al instante y sin internet. Si agregan canciones a la carpeta, se
+   detectan al abrir la app o al pulsar ↻. También puedes agregar un archivo suelto con "+ Colección".
+
+Requiere abrir la app desde https (por ejemplo GitHub Pages) o `http://127.0.0.1`, y registrar ese origen en el ID de
+cliente. No funciona en la versión publicada en claude.ai.
+
+## Controladoras DJ (MIDI)
+
+Sirve con cualquier controladora USB que hable MIDI estándar, que es prácticamente todas (Pioneer DDJ, Numark, Hercules,
+Reloop, Denon, Traktor en modo MIDI). En el navegador, bajo **Controladora**:
+
+1. **Conectar controladora**: el navegador pide permiso MIDI una vez y a partir de ahí la app se conecta sola al abrirla.
+2. **Aprender**: pulsa "Aprender" en una función (play, cue, hot cues, loops, pitch, jog, faders, EQ, filtro, efectos,
+   crossfader, navegación y carga de pistas, Automix) y mueve ese control en la controladora. Queda asignado y guardado
+   para ese dispositivo. Cada mapeo tiene modo (botón, absoluto, absoluto de 14 bits para faders finos, relativo para
+   jogs y encoders), inversión y luz.
+3. **Preset**: hay un mapeo aproximado para Pioneer DDJ-400 / FLX4 que se carga solo al detectarla; lo que no coincida
+   se corrige con Aprender. Los mapeos se exportan e importan en JSON.
+4. **Luces**: los botones con estado (play, cue, sync, hot cues, loops, CUE de auriculares) se encienden en la controladora.
+5. **Salida de audio y pre-escucha**: elige la tarjeta de sonido de la controladora. Si tiene 4 canales, el master sale
+   por 1-2 y los auriculares por 3-4, y los botones **🎧 CUE** del mixer mandan cada deck a los auriculares antes del fader.
+   La perilla PHONES controla el volumen de auriculares.
+
+El jog wheel empuja el tempo mientras suena (nudge) y busca dentro de la pista en pausa. Web MIDI existe en Chrome y Edge
+de escritorio; no en Safari ni en móviles.
 
 ## Pendrive y carpetas vinculadas
 
@@ -127,17 +163,19 @@ dj-system/
     ├── analyzer.js Análisis: BPM, grilla, tonalidad, bandas, ganancia, energía, estructura
     ├── tags.js     Lectura de etiquetas ID3v2
     ├── library.js  Colección, decodificación, IndexedDB
-    ├── sources.js  Carpetas y pendrives vinculados (File System Access API)
+    ├── gdrive.js   Google Drive: sesión de Google, navegación y descarga
+    ├── sources.js  Carpetas, pendrives y carpetas de Drive vinculadas
     ├── deck.js     Reproducción, cue, loops, pitch, sync, FX, dibujo
     ├── mixer.js    Strips de canal, medidores, crossfader
     ├── spotify.js  OAuth PKCE, búsqueda, playlists, cruce con biblioteca, reproductor
     ├── automix.js  Cola y transiciones automáticas
+    ├── midi.js     Controladoras MIDI, modo Aprender, luces, salida de audio y pre-escucha
     └── app.js      Wiring, teclado, grabación, ayuda
 ```
 
 ## Limitaciones conocidas del prototipo
 
-- No hay salida de pre-escucha (auriculares) separada: los navegadores exponen una sola salida de audio.
+- La pre-escucha por auriculares necesita una tarjeta de sonido de 4 canales (la de la controladora) y Chrome o Edge.
 - Los formatos soportados dependen del navegador (MP3, WAV, OGG y AAC funcionan en todos; FLAC no en Safari).
 - La detección de BPM y de estructura funciona bien en música con pulso marcado; en material sin bajo claro conviene corregir a mano.
 - La tonalidad se estima sobre toda la pista; en temas con modulaciones puede quedar en una tonalidad vecina.
@@ -146,7 +184,7 @@ dj-system/
 
 ## Siguientes pasos sugeridos
 
-1. Soporte de controladoras MIDI (Web MIDI API) para jog wheels y pads.
+1. Presets de fábrica para más modelos de controladoras y scratch con sensor táctil del jog.
 2. Análisis por frases (8/16 compases) y detección de voces.
 3. Listas de reproducción y etiquetas en la biblioteca.
 4. Backend opcional para compartir bibliotecas y grabaciones entre dispositivos.

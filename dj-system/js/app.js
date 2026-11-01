@@ -136,6 +136,21 @@
   /* ---- Automix ---- */
   Automix.build($('#automix'), { toast, loadTrack, onChange: updateTree }, decks, Library);
 
+  /* ---- Google Drive ---- */
+  GDrive.build($('#gdrive'), {
+    toast,
+    linkedIds: () => Sources.linkedDriveIds(),
+    linkFolder: (id, name) => { Sources.linkDrive(id, name); toast('Vinculando «' + name + '»: las pistas se descargan y analizan en segundo plano.'); },
+    importFile: async f => {
+      toast('Descargando ' + f.name + '…');
+      try { const file = await GDrive.download(f.driveId, f.name, f.mtime); Library.addFiles([file]); updateTree(); toast(f.name + ' agregada a la colección.'); }
+      catch (e) { toast('Google Drive: ' + e.message); }
+    }
+  });
+
+  /* ---- Controladora MIDI y salida de audio ---- */
+  Midi.build($('#midi'), { toast, decks, library: Library, automix: Automix, loadTrack });
+
   /* ---- Master, grabación, ayuda ---- */
   $('#master-vol').addEventListener('input', e => {
     Engine.master.gain.setTargetAtTime(parseFloat(e.target.value), Engine.ctx.currentTime, 0.01);
@@ -276,5 +291,5 @@
   }
   requestAnimationFrame(frame);
 
-  window.MixDeck = { deckA, deckB, Library, Engine, Mixer, SpotifyLink, Automix, Analyzer, Sources };
+  window.MixDeck = { deckA, deckB, Library, Engine, Mixer, SpotifyLink, Automix, Analyzer, Sources, Midi, GDrive };
 })();
