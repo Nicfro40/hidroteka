@@ -5,6 +5,8 @@ const Mixer = (() => {
   let xfInput = null;
   const knobs = { A: {}, B: {} };
   const faders = {};
+  const pflBtns = {};
+  let phonesKnob = null;
 
   const dbFmt = v => (v > 0 ? '+' : '') + v.toFixed(1) + ' dB';
 
@@ -20,7 +22,8 @@ const Mixer = (() => {
         '<span class="xf-label xf-a">A</span>' +
         '<input type="range" class="xfader" min="-1" max="1" step="0.01" value="0" title="Crossfader (← →)">' +
         '<span class="xf-label xf-b">B</span>' +
-      '</div>';
+      '</div>' +
+      '<div class="phones-wrap"></div>';
 
     for (const id of ['A', 'B']) {
       const deck = decks[id];
@@ -42,7 +45,13 @@ const Mixer = (() => {
       const badge = document.createElement('div');
       badge.className = 'strip-badge';
       badge.textContent = id;
-      strip.append(knobBox, lower, badge);
+      const pfl = document.createElement('button');
+      pfl.className = 'btn pfl';
+      pfl.textContent = '🎧 CUE';
+      pfl.title = 'Pre-escucha en auriculares (canales 3-4 de la tarjeta)';
+      pfl.addEventListener('click', () => setPfl(id, !deck.pfl));
+      pflBtns[id] = pfl;
+      strip.append(knobBox, lower, pfl, badge);
       vuCanvases[id] = lower.querySelector('.vu');
       faders[id] = lower.querySelector('.fader');
       faders[id].addEventListener('input', e => deck.setFader(parseFloat(e.target.value)));
@@ -51,7 +60,12 @@ const Mixer = (() => {
     xfInput = mount.querySelector('.xfader');
     xfInput.addEventListener('input', () => applyXf(parseFloat(xfInput.value)));
     applyXf(0);
+    phonesKnob = createKnob({ label: 'PHONES', min: 0, max: 1, value: 0.8, format: v => Math.round(v * 100) + '%', onChange: v => Engine.setPhones(v) });
+    mount.querySelector('.phones-wrap').appendChild(phonesKnob.el);
   }
+  function setPfl(id, on) { decks[id].setPfl(on); pflBtns[id].classList.toggle('on', !!on); }
+  function getPfl(id) { return !!decks[id].pfl; }
+  function setFader(id, v) { v = Math.max(0, Math.min(1, v)); faders[id].value = v; decks[id].setFader(v); }
 
   /* Curva suave: ambos canales al 100% en el centro, silencio total en el extremo opuesto. */
   function applyXf(v) {
@@ -103,5 +117,5 @@ const Mixer = (() => {
     }
   }
 
-  return { build, draw, nudgeXf, setXf, getXf, setEq, getEq, getFader, drawVu };
+  return { build, draw, nudgeXf, setXf, getXf, setEq, getEq, getFader, setFader, setPfl, getPfl, drawVu };
 })();

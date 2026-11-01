@@ -136,6 +136,9 @@
   /* ---- Automix ---- */
   Automix.build($('#automix'), { toast, loadTrack, onChange: updateTree }, decks, Library);
 
+  /* ---- Controladora MIDI y salida de audio ---- */
+  Midi.build($('#midi'), { toast, decks, library: Library, automix: Automix, loadTrack });
+
   /* ---- Master, grabación, ayuda ---- */
   $('#master-vol').addEventListener('input', e => {
     Engine.master.gain.setTargetAtTime(parseFloat(e.target.value), Engine.ctx.currentTime, 0.01);
@@ -276,5 +279,5 @@
   }
   requestAnimationFrame(frame);
 
-  window.MixDeck = { deckA, deckB, Library, Engine, Mixer, SpotifyLink, Automix, Analyzer, Sources };
+  window.MixDeck = { deckA, deckB, Library, Engine, Mixer, SpotifyLink, Automix, Analyzer, Sources, Midi };
 })();

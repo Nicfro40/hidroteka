@@ -10,6 +10,13 @@ const Engine = (() => {
   master.connect(analyser);
   analyser.connect(ctx.destination);
 
+  /* Bus de pre-escucha (auriculares): los decks con CUE envían aquí, antes del fader. */
+  const cueBus = ctx.createGain();
+  const phones = ctx.createGain();
+  phones.gain.value = 0.8;
+  cueBus.connect(phones);
+  let fourCh = false, merger = null, sinkId = '';
+
   let recDest = null;
   let recorder = null;
   let chunks = [];
@@ -17,6 +24,38 @@ const Engine = (() => {
   function resume() {
     if (ctx.state !== 'running') ctx.resume();
   }
+  function setMaster(v) { master.gain.setTargetAtTime(Math.max(0, Math.min(1, v)), ctx.currentTime, 0.01); }
+  function setPhones(v) { phones.gain.setTargetAtTime(Math.max(0, Math.min(1, v)), ctx.currentTime, 0.01); }
+
+  /* Elige la tarjeta de salida; con 4 canales o más, master en 1-2 y auriculares en 3-4. */
+  async function setOutput(deviceId) {
+    if (!ctx.setSinkId) throw new Error('este navegador no permite elegir la salida');
+    await ctx.setSinkId(deviceId || '');
+    sinkId = deviceId || '';
+    return configureChannels();
+  }
+  function configureChannels() {
+    const max = ctx.destination.maxChannelCount || 2;
+    if (max >= 4 && !fourCh) {
+      try {
+        ctx.destination.channelCount = 4;
+        ctx.destination.channelCountMode = 'explicit';
+        ctx.destination.channelInterpretation = 'discrete';
+        merger = ctx.createChannelMerger(4);
+        const sm = ctx.createChannelSplitter(2), sc = ctx.createChannelSplitter(2);
+        analyser.disconnect(ctx.destination);
+        analyser.connect(sm); sm.connect(merger, 0, 0); sm.connect(merger, 1, 1);
+        phones.connect(sc); sc.connect(merger, 0, 2); sc.connect(merger, 1, 3);
+        merger.connect(ctx.destination);
+        fourCh = true;
+      } catch (e) { fourCh = false; }
+    } else if (max < 4 && fourCh) {
+      try { merger.disconnect(); analyser.connect(ctx.destination); ctx.destination.channelCount = 2; } catch (e) { /* ignorar */ }
+      fourCh = false; merger = null;
+    }
+    return { channels: max, cue: fourCh };
+  }
+  function outputStatus() { return { sink: sinkId, channels: ctx.destination.maxChannelCount || 2, cue: fourCh }; }
 
   function startRecording() {
     if (recorder || !window.MediaRecorder) return false;
@@ -64,7 +103,8 @@ const Engine = (() => {
   function dbToGain(db) { return Math.pow(10, db / 20); }
 
   return {
-    ctx, master, analyser, resume, startRecording, stopRecording, makeImpulse, dbToGain,
+    ctx, master, analyser, cueBus, phones, resume, startRecording, stopRecording, makeImpulse, dbToGain,
+    setMaster, setPhones, setOutput, outputStatus,
     get recording() { return !!recorder; }
   };
 })();

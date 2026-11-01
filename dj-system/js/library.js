@@ -16,7 +16,7 @@ const Library = (() => {
   const queue = [];
   let analyzing = false, analyzingNow = null, stageNow = '';
   let addSeq = 0;
-  let sortKey = 'added', sortDir = 1, filter = '', sourceFilter = null;
+  let sortKey = 'added', sortDir = 1, filter = '', sourceFilter = null, selectedId = null;
   const hooks = { masterCamelot: () => null };
 
   const uid = () => (crypto.randomUUID ? crypto.randomUUID()
@@ -288,7 +288,7 @@ const Library = (() => {
       const cover = coverUrl(t);
       const bpm = t.analyzing ? '<span class="analyzing">…</span>' : t.error ? '<span class="err">error</span>' : t.bpm ? fmtBpm(t.bpm) : '—';
       const src = t.source ? '<span class="t-src" title="' + esc(Sources.nameOf(t.source.id)) + ' · ' + esc(t.source.path) + '">' + (t.missing ? '⊘' : '▮') + '</span>' : '';
-      return '<tr data-id="' + t.id + '" draggable="true" class="' + (t.error ? 'row-err' : '') + (t.analyzing ? ' row-analyzing' : '') + (t.missing ? ' row-missing' : '') + '">' +
+      return '<tr data-id="' + t.id + '" draggable="true" class="' + (t.error ? 'row-err' : '') + (t.analyzing ? ' row-analyzing' : '') + (t.missing ? ' row-missing' : '') + (t.id === selectedId ? ' selected' : '') + '">' +
         '<td class="t-art">' + (cover ? '<img src="' + cover + '" alt="" loading="lazy">' : '<span class="art-empty"></span>') + '</td>' +
         '<td class="t-name"><div class="t-title" title="' + esc(t.name) + (t.missing ? ' (no conectado)' : '') + '">' + src + esc(t.name) + '</div></td>' +
         '<td class="t-artist" title="' + esc(t.artist) + '">' + esc(t.artist || '—') + '</td>' +
@@ -323,8 +323,21 @@ const Library = (() => {
     }
   }
 
+  function selected() { return get(selectedId); }
+  function selectRelative(d) {
+    const list = visibleTracks();
+    if (!list.length) return;
+    let i = list.findIndex(t => t.id === selectedId);
+    i = i < 0 ? (d > 0 ? 0 : list.length - 1) : Math.max(0, Math.min(list.length - 1, i + d));
+    selectedId = list[i].id;
+    render();
+    const row = tbody.querySelector('tr.selected');
+    if (row && row.scrollIntoView) row.scrollIntoView({ block: 'nearest' });
+  }
   function bindTable() {
     tbody.addEventListener('click', e => {
+      const tr = e.target.closest('tr');
+      if (tr && tr.dataset.id && !e.target.closest('button')) { selectedId = tr.dataset.id; tbody.querySelectorAll('tr.selected').forEach(x => x.classList.remove('selected')); tr.classList.add('selected'); }
       const btn = e.target.closest('button[data-act]');
       if (!btn) return;
       const id = btn.closest('tr').dataset.id;
@@ -352,5 +365,5 @@ const Library = (() => {
   }
 
   return { init, on, get, addFiles, decode, updateBpm, reanalyze, remove, clear, coverUrl, render, tracks, fmt,
-    listSources, putSource, deleteSource, syncSource, countBySource, removeBySource, setSourceFilter };
+    listSources, putSource, deleteSource, syncSource, countBySource, removeBySource, setSourceFilter, selected, selectRelative };
 })();
