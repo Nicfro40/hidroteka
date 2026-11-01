@@ -123,6 +123,13 @@ const Library = (() => {
       analyzingNow = rec; stageNow = 'decodificando';
       render();
       try {
+        if (!decoded.has(rec.id) && (rec.tagsPending || (rec.source && rec.source.cache && !rec.blob))) {
+          stageNow = rec.source && rec.source.driveId ? 'descargando' : 'leyendo';
+          renderStatus();
+          const file = await fileOf(rec);
+          if (rec.tagsPending) await readTags(rec, file);
+          if (rec.source && rec.source.cache && !rec.blob) rec.blob = file;   // copia local para no volver a descargar
+        }
         const buf = await decode(rec);
         const a = await Analyzer.analyze(buf, s => { stageNow = s; renderStatus(); });
         Object.assign(rec, {
@@ -161,39 +168,41 @@ const Library = (() => {
   }
 
   /* Sincroniza la colección con el contenido actual de una carpeta vinculada. */
-  async function syncSource(sourceId, sourceName, files) {
+  async function syncSource(sourceId, sourceName, files, opts) {
+    const cache = !!(opts && opts.cache);
     const byPath = new Map();
     for (const t of tracks) if (t.source && t.source.id === sourceId) byPath.set(t.source.path, t);
     let added = 0;
     const seen = new Set();
-    for (const { path, file } of files) {
+    for (const en of files) {
+      const { path, file } = en;
+      const size = en.size != null ? en.size : (file ? file.size : 0);
+      const mtime = en.mtime != null ? en.mtime : (file ? file.lastModified : 0);
+      const fname = en.name || (file ? file.name : path.split('/').pop());
       seen.add(path);
       const prev = byPath.get(path);
       if (prev) {
-        const changed = prev.source.size !== file.size || prev.source.mtime !== file.lastModified;
+        const changed = prev.source.size !== size || prev.source.mtime !== mtime;
         prev.missing = false;
+        if (en.driveId) prev.source.driveId = en.driveId;
         if (changed) {
-          prev.source.size = file.size; prev.source.mtime = file.lastModified;
-          decoded.delete(prev.id);
-          Tags.read(file).then(tags => { prev.name = tags.title || prev.name; prev.artist = tags.artist || prev.artist; prev.cover = tags.cover || prev.cover; render(); });
+          prev.source.size = size; prev.source.mtime = mtime;
+          decoded.delete(prev.id); prev.blob = null; prev.tagsPending = true;
+          if (file) readTags(prev, file);
           enqueue(prev);
         } else if (!prev.error && prev.analysisVersion !== Analyzer.VERSION && !prev.analyzing) enqueue(prev);
         continue;
       }
       const rec = {
-        id: uid(), name: file.name.replace(/\.[^.]+$/, ''), artist: '', album: '', cover: null, blob: null,
-        source: { id: sourceId, path, size: file.size, mtime: file.lastModified },
+        id: uid(), name: fname.replace(/\.[^.]+$/, ''), artist: '', album: '', cover: null, blob: null,
+        source: { id: sourceId, path, size, mtime, driveId: en.driveId || null, cache },
         duration: 0, bpm: null, firstBeat: 0, key: null, camelot: null, gainDb: 0, energy: null,
         audioStart: 0, audioEnd: 0, bands: null, cues: null, analysisVersion: 0, missing: false,
-        added: Date.now() * 1000 + (addSeq++ % 1000), analyzing: true
+        added: Date.now() * 1000 + (addSeq++ % 1000), analyzing: true, tagsPending: true
       };
       tracks.push(rec);
       added++;
-      Tags.read(file).then(tags => {
-        rec.name = tags.title || rec.name; rec.artist = tags.artist || ''; rec.album = tags.album || '';
-        rec.cover = tags.cover || null; rec.tagBpm = tags.bpm;
-        dbPut(rec); render();
-      });
+      if (file) readTags(rec, file);
       enqueue(rec);
     }
     let missing = 0;
@@ -201,6 +210,14 @@ const Library = (() => {
     for (const t of tracks) if (t.source && t.source.id === sourceId) await dbPut(t);
     render();
     return { added, missing, total: files.length };
+  }
+  function readTags(rec, file) {
+    rec.tagsPending = false;
+    return Tags.read(file).then(tags => {
+      rec.name = tags.title || rec.name; rec.artist = tags.artist || rec.artist || ''; rec.album = tags.album || rec.album || '';
+      rec.cover = tags.cover || rec.cover || null; rec.tagBpm = tags.bpm;
+      dbPut(rec); render();
+    });
   }
   function countBySource(id) { return tracks.filter(t => t.source && t.source.id === id).length; }
   async function removeBySource(id) {

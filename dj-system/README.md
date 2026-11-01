@@ -49,9 +49,24 @@ Cada pista que importas se analiza sola, en segundo plano, y el resultado queda 
 - **Navegador** con árbol lateral (Colección, Automix, Spotify, Fuentes), columnas ordenables, búsqueda, carátulas y doble clic para cargar en el deck libre. Las pistas quedan guardadas en IndexedDB.
 - **Pendrive y carpetas vinculadas**: la app recuerda la carpeta, la relee al iniciar y detecta pistas nuevas o faltantes (ver abajo).
 - **Controladoras MIDI**: cualquier controladora USB con modo Aprender, luces y pre-escucha por auriculares (ver abajo).
+- **Google Drive**: sesión con tu cuenta de Google y carpetas compartidas vinculadas que se descargan y analizan solas (ver abajo).
 - **Atajos de teclado** para todo el transporte (botón "? Atajos" o tecla `?`).
 - **Automix**: arma una cola y la app mezcla sola (ver sección siguiente).
 - **Spotify**: búsqueda, playlists como setlists, cruce con la biblioteca local y reproductor (ver más abajo).
+
+## Google Drive
+
+Cuando te comparten carpetas con música por Drive, no hace falta descargarlas a mano. En **Google Drive**:
+
+1. Pulsa ⚙ y sigue los pasos para crear un ID de cliente de Google (gratis; la app solo pide permiso de lectura).
+2. **Conectar con Google**: inicias sesión con tu cuenta. La sesión se renueva sola mientras la cuenta siga abierta.
+3. Navega **Compartidos conmigo** o **Mi unidad** y pulsa **Vincular** en una carpeta. Aparece en **Fuentes** con el icono ▲.
+4. La app descarga y analiza las canciones **en segundo plano** (verás "descargando" en el estado de la colección) y
+   guarda una copia en el navegador: después cargan al instante y sin internet. Si agregan canciones a la carpeta, se
+   detectan al abrir la app o al pulsar ↻. También puedes agregar un archivo suelto con "+ Colección".
+
+Requiere abrir la app desde https (por ejemplo GitHub Pages) o `http://127.0.0.1`, y registrar ese origen en el ID de
+cliente. No funciona en la versión publicada en claude.ai.
 
 ## Controladoras DJ (MIDI)
 
@@ -148,7 +163,8 @@ dj-system/
     ├── analyzer.js Análisis: BPM, grilla, tonalidad, bandas, ganancia, energía, estructura
     ├── tags.js     Lectura de etiquetas ID3v2
     ├── library.js  Colección, decodificación, IndexedDB
-    ├── sources.js  Carpetas y pendrives vinculados (File System Access API)
+    ├── gdrive.js   Google Drive: sesión de Google, navegación y descarga
+    ├── sources.js  Carpetas, pendrives y carpetas de Drive vinculadas
     ├── deck.js     Reproducción, cue, loops, pitch, sync, FX, dibujo
     ├── mixer.js    Strips de canal, medidores, crossfader
     ├── spotify.js  OAuth PKCE, búsqueda, playlists, cruce con biblioteca, reproductor

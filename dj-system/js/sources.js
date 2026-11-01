@@ -45,6 +45,19 @@ const Sources = (() => {
     await scan(src);
     return src;
   }
+  /* Carpeta de Google Drive como fuente: las pistas se descargan en segundo plano y se guardan. */
+  async function linkDrive(folderId, name) {
+    const dup = sources.find(s => s.kind === 'gdrive' && s.folderId === folderId);
+    if (dup) { hooks.toast('Esa carpeta de Drive ya está vinculada.'); return scan(dup); }
+    const src = { id: uid(), name: name || 'Drive', kind: 'gdrive', folderId, cache: true, added: Date.now(), status: 'scanning', count: 0 };
+    sources.push(src);
+    await Library.putSource({ id: src.id, name: src.name, kind: 'gdrive', folderId, cache: true, added: src.added });
+    render();
+    await scan(src);
+    return src;
+  }
+  const linkedDriveIds = () => sources.filter(s => s.kind === 'gdrive').map(s => s.folderId);
+
   async function unlink(id) {
     const i = sources.findIndex(s => s.id === id);
     if (i < 0) return;
@@ -60,6 +73,11 @@ const Sources = (() => {
 
   /* Comprueba permiso y presencia; con `interactive` pide el permiso (requiere un clic). */
   async function check(src, interactive) {
+    if (src.kind === 'gdrive') {
+      if (!GDrive.connected() && !(await GDrive.reconnectSilently())) { src.status = 'prompt'; render(); return false; }
+      await scan(src);
+      return src.status === 'ok';
+    }
     try {
       let p = 'granted';
       if (src.handle.queryPermission) p = await src.handle.queryPermission({ mode: 'read' });
@@ -77,23 +95,35 @@ const Sources = (() => {
   async function scan(src) {
     src.status = 'scanning';
     render();
-    const entries = [];
-    try {
-      await walk(src.handle, '', entries, 0);
-    } catch (e) {
-      src.status = 'missing';
-      render();
-      return;
-    }
     const files = [];
-    for (const en of entries) {
+    if (src.kind === 'gdrive') {
       try {
-        const f = await en.handle.getFile();
-        files.push({ path: en.path, file: f });
-        fileCache.set(src.id + '\n' + en.path, f);
-      } catch (e) { /* archivo inaccesible: se trata como faltante */ }
+        const list = await GDrive.listRecursive(src.folderId);
+        for (const f of list) files.push({ path: f.path, name: f.name, size: f.size, mtime: f.mtime, driveId: f.driveId });
+      } catch (e) {
+        src.status = e.friendly ? 'prompt' : 'missing';
+        render();
+        if (!e.friendly) hooks.toast('Google Drive: ' + e.message);
+        return;
+      }
+    } else {
+      const entries = [];
+      try {
+        await walk(src.handle, '', entries, 0);
+      } catch (e) {
+        src.status = 'missing';
+        render();
+        return;
+      }
+      for (const en of entries) {
+        try {
+          const f = await en.handle.getFile();
+          files.push({ path: en.path, name: f.name, size: f.size, mtime: f.lastModified, file: f });
+          fileCache.set(src.id + '\n' + en.path, f);
+        } catch (e) { /* archivo inaccesible: se trata como faltante */ }
+      }
     }
-    const r = await Library.syncSource(src.id, src.name, files);
+    const r = await Library.syncSource(src.id, src.name, files, { cache: src.kind === 'gdrive' ? src.cache !== false : false });
     src.count = r.total;
     src.status = 'ok';
     render();
@@ -114,6 +144,10 @@ const Sources = (() => {
     if (fileCache.has(key)) { const f = fileCache.get(key); fileCache.delete(key); return f; }
     const src = sources.find(s => s.id === ref.id);
     if (!src) throw friendly('Esta pista estaba en una carpeta que ya no está vinculada.');
+    if (src.kind === 'gdrive') {
+      try { return await GDrive.download(ref.driveId, ref.path.split('/').pop(), ref.mtime); }
+      catch (e) { if (e.friendly) { if (src.status === 'ok') { src.status = 'prompt'; render(); } throw e; } throw friendly('Google Drive: no se pudo descargar "' + ref.path + '" (' + e.message + ').'); }
+    }
     try {
       const parts = ref.path.split('/');
       let dir = src.handle;
@@ -138,10 +172,10 @@ const Sources = (() => {
         : s.status === 'prompt' ? '<i class="src-dot warn" title="Toca para dar permiso"></i>'
         : s.status === 'missing' ? '<i class="src-dot off" title="No conectada"></i>'
         : '<i class="src-dot" title="Comprobando…"></i>';
-      const hint = s.status === 'prompt' ? 'toca para reconectar' : s.status === 'missing' ? 'no conectado' : s.status === 'scanning' ? 'leyendo…' : (s.count + (s.count === 1 ? ' pista' : ' pistas'));
+      const hint = s.status === 'prompt' ? (s.kind === 'gdrive' ? 'conecta Google' : 'toca para reconectar') : s.status === 'missing' ? 'no conectado' : s.status === 'scanning' ? 'leyendo…' : (s.count + (s.count === 1 ? ' pista' : ' pistas'));
       return '<div class="src-item' + (s.status === 'ok' ? '' : ' src-' + s.status) + '" data-id="' + s.id + '">' +
         '<button class="src-main" data-act="open" title="' + esc(s.name) + '">' + st +
-          '<span class="src-icon">' + (s.kind === 'usb' ? '▮' : '▭') + '</span>' +
+          '<span class="src-icon">' + (s.kind === 'usb' ? '▮' : s.kind === 'gdrive' ? '▲' : '▭') + '</span>' +
           '<span class="src-name">' + esc(s.name) + '</span><em>' + esc(hint) + '</em></button>' +
         '<button class="src-btn" data-act="rescan" title="Volver a leer la carpeta">↻</button>' +
         '<button class="src-btn" data-act="unlink" title="Desvincular">×</button>' +
@@ -165,6 +199,7 @@ const Sources = (() => {
       if (!src) return;
       if (btn.dataset.act === 'unlink') unlink(id);
       else if (btn.dataset.act === 'rescan') check(src, true);
+      else if (src.status === 'prompt' && src.kind === 'gdrive') GDrive.login().then(() => check(src, false));
       else if (src.status === 'prompt' || src.status === 'missing') check(src, true);
       else hooks.onSelect(id);
     });
@@ -180,7 +215,7 @@ const Sources = (() => {
 
   return {
     init: async (mount, h) => { await init(mount, h); bind(); },
-    link, linkHandle, unlink, getFile, nameOf, supported,
+    link, linkHandle, linkDrive, linkedDriveIds, unlink, getFile, nameOf, supported,
     get list() { return sources; }
   };
 })();
