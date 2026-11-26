@@ -145,7 +145,7 @@ form { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
   <header class="top">
     <h1>Inventario Nicfro <small>Compras, ventas y ganancia por producto</small></h1>
     <div class="actions">
-      <button class="btn" id="btn-foto" type="button" hidden>Foto de compra</button>
+      <button class="btn" id="btn-foto" type="button">Foto de compra</button>
       <input type="file" id="foto" accept="image/jpeg,image/png,image/webp" hidden>
       <button class="btn" id="btn-compra" type="button">+ Registrar compra</button>
       <button class="btn primary" id="btn-venta" type="button">+ Registrar venta</button>
@@ -481,7 +481,7 @@ async function escribir(fn, ok) {
     if (dlg.open) error(msg); else toast(msg);
   } finally { b.disabled = false; }
 }
-let tt; function toast(msg) { const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(tt); tt = setTimeout(() => t.hidden = true, 2600); }
+let tt; function toast(msg, ms) { const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(tt); tt = setTimeout(() => t.hidden = true, ms || 2600); }
 
 /* ---------- Editar un producto desde el inventario ---------- */
 const dlgp = $("#dlgp"), r2 = n => Math.round(n * 100) / 100;
@@ -525,7 +525,7 @@ $("#pp-borrar").addEventListener("click", () => {
 
 /* ---------- Compra desde una foto (Claude lee la boleta o factura) ---------- */
 const dlgf = $("#dlgf"), pfItems = $("#pf-items");
-let sample = null, ctlFoto = null;
+let sample = null, ctlFoto = null, fotoLista = false;
 const ERR_FOTO = {
   not_granted: "Para leer fotos, la página necesita tu permiso para usar Claude.",
   rate_limited: "Llegaste al límite de uso de Claude por ahora. Inténtalo más tarde o registra la compra a mano.",
@@ -630,7 +630,11 @@ $("#formf").addEventListener("submit", async ev => {
 dlgf.addEventListener("close", () => { if (ctlFoto) ctlFoto.abort(); });
 $("#pf-cancelar").addEventListener("click", () => dlgf.close());
 $("#pf-otra").addEventListener("click", () => $("#foto").click());
-$("#btn-foto").addEventListener("click", () => store ? $("#foto").click() : toast("Un momento, cargando tus datos…"));
+$("#btn-foto").addEventListener("click", () => {
+  if (!store || !fotoLista) return toast("Un momento, cargando…");
+  if (!sample) return toast("Aquí no se pueden leer fotos. Abre la página en Claude con tu sesión iniciada, o registra la compra a mano.", 7000);
+  $("#foto").click();
+});
 $("#foto").addEventListener("change", e => { const f = e.target.files[0]; e.target.value = ""; if (f) { if (ctlFoto) ctlFoto.abort(); leerFoto(f); } });
 
 /* ---------- Ejemplos (marcados, se borran con un botón) ---------- */
@@ -675,9 +679,9 @@ render();
   if (db) { modo = "db"; store = storeDb(db); } else { modo = "local"; store = storeLocal(); render(); }
   try {
     const s = window.claude && window.claude.use ? await window.claude.use("sample") : null;
-    const lim = s ? await s.limits().catch(() => null) : null;
-    if (lim && lim.images) { sample = s; $("#btn-foto").hidden = false; }
+    sample = s || null;
   } catch {}
+  fotoLista = true;
 })();
 // Antes de que el almacenamiento responda, los botones esperan.
 const esperar = fn => (...a) => store ? fn(...a) : toast("Un momento, cargando tus datos…");
