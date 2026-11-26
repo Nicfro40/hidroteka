@@ -95,6 +95,7 @@ tbody tr:hover td { background: var(--sunken); }
 .pill { display: inline-block; font-size: .72rem; font-weight: 600; padding: 2px 8px; border-radius: 99px; vertical-align: 1px; }
 .pill.compra { background: var(--accent-soft); color: var(--accent); }
 .pill.venta { background: var(--gain-soft); color: var(--gain); }
+.pill.ajuste { background: var(--warn-soft); color: var(--warn); }
 .pill.out { background: var(--loss-soft); color: var(--loss); }
 .pill.low { background: var(--warn-soft); color: var(--warn); }
 .empty { padding: 36px 20px; text-align: center; color: var(--muted); display: flex; flex-direction: column; gap: 12px; align-items: center; }
@@ -220,6 +221,23 @@ form { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
     </div>
   </form>
 </dialog>
+<dialog id="dlgp" aria-labelledby="dlgp-t">
+  <form id="formp" novalidate>
+    <h2 id="dlgp-t">Editar producto</h2>
+    <label class="field"><span>Nombre</span><input id="pp-nombre" maxlength="120" autocomplete="off"></label>
+    <div class="two">
+      <label class="field"><span>Stock actual</span><input id="pp-stock" type="number" inputmode="decimal" min="0" step="any"></label>
+      <label class="field"><span>Costo promedio (unidad)</span><input id="pp-costo" type="number" inputmode="decimal" min="0" step="any"></label>
+    </div>
+    <div class="hint">Si cambias el stock o el costo, se anota un ajuste con la fecha de hoy en Movimientos. La ganancia de las ventas anteriores no cambia.</div>
+    <div class="err" id="pp-err" role="alert" hidden></div>
+    <div class="form-actions">
+      <button class="btn danger" id="pp-borrar" type="button">Borrar producto</button>
+      <button class="btn" id="pp-cancelar" type="button">Cancelar</button>
+      <button class="btn primary" id="pp-guardar" type="submit">Guardar</button>
+    </div>
+  </form>
+</dialog>
 <dialog id="dlgf" aria-labelledby="dlgf-t">
   <form id="formf" novalidate>
     <h2 id="dlgf-t">Compra desde una foto</h2>
@@ -258,9 +276,10 @@ const hoy = () => iso(new Date());
 const clave = s => s.trim().toLowerCase().replace(/\s+/g, " ");
 
 /* ---------- Cálculo: costo promedio ponderado ---------- */
+const ORDEN = { compra: 0, venta: 1, ajuste: 2 };
 function calcular(movs, enPeriodo) {
   const orden = [...movs].sort((a, b) => a.fecha.localeCompare(b.fecha)
-    || (a.tipo === b.tipo ? 0 : a.tipo === "compra" ? -1 : 1) || a.creado - b.creado);
+    || ORDEN[a.tipo] - ORDEN[b.tipo] || a.creado - b.creado);
   const prods = new Map(), filas = [];
   const tot = { compras: 0, nCompras: 0, ventas: 0, nVentas: 0, ganancia: 0 };
   for (const m of orden) {
@@ -271,6 +290,9 @@ function calcular(movs, enPeriodo) {
     if (m.tipo === "compra") {
       p.stock += m.cantidad; p.valor += total; p.ultimoCosto = m.precio;
       if (en) { tot.compras += total; tot.nCompras++; }
+    } else if (m.tipo === "ajuste") {
+      // Corrección manual: suma o resta unidades y fija el costo promedio.
+      p.stock = Math.max(0, p.stock + m.cantidad); p.valor = p.stock * m.precio; p.ultimoCosto = m.precio;
     } else {
       const cu = p.stock > 1e-9 ? p.valor / p.stock : p.ultimoCosto;
       f.costoUnit = cu; f.ganancia = total - cu * m.cantidad; f.faltaStock = m.cantidad > p.stock + 1e-9;
@@ -291,9 +313,9 @@ function calcular(movs, enPeriodo) {
 const LS = "inventario.movimientos.v1";
 let movs = [], cargado = false, store = null, modo = "";
 const limpiar = (id, d) => {
-  if (!d || (d.tipo !== "compra" && d.tipo !== "venta")) return null;
+  if (!d || !(d.tipo in ORDEN)) return null;
   const cantidad = Number(d.cantidad), precio = Number(d.precio);
-  if (!(cantidad > 0) || !(precio >= 0) || typeof d.producto !== "string" || !d.producto.trim()) return null;
+  if (!(d.tipo === "ajuste" ? isFinite(cantidad) : cantidad > 0) || !(precio >= 0) || typeof d.producto !== "string" || !d.producto.trim()) return null;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(d.fecha || "")) return null;
   return { id, tipo: d.tipo, producto: d.producto.slice(0, 120), cantidad, precio, fecha: d.fecha,
     nota: typeof d.nota === "string" ? d.nota.slice(0, 140) : "", creado: Number(d.creado) || 0, ejemplo: d.ejemplo === true };
@@ -359,7 +381,7 @@ function render() {
     <button class="btn" id="btn-ejemplo" type="button">Ver cómo se ve con datos de ejemplo</button></div>`;
   else if (vista === "inv") {
     const ps = r.prods.filter(p => p.clave.includes(q)).sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
-    tabla.innerHTML = ps.length ? `<table><thead><tr><th>Producto</th><th>Stock</th><th>Costo prom.</th><th>Valor en stock</th><th>Vendidos</th><th>Vendiste</th><th>Ganancia</th><th>Margen</th></tr></thead><tbody>${ps.map(p => `<tr>
+    tabla.innerHTML = ps.length ? `<table><thead><tr><th>Producto</th><th>Stock</th><th>Costo prom.</th><th>Valor en stock</th><th>Vendidos</th><th>Vendiste</th><th>Ganancia</th><th>Margen</th><th></th></tr></thead><tbody>${ps.map(p => `<tr>
       <td class="name">${esc(p.nombre)} ${p.stock === 0 ? `<span class="pill out">Agotado</span>` : p.stock <= 2 ? `<span class="pill low">Queda poco</span>` : ""}</td>
       <td class="num">${cant(p.stock)}</td>
       <td class="num">${p.stock > 0 ? money(p.valor / p.stock) : `<span class="muted">${money(p.ultimoCosto)}</span>`}</td>
@@ -367,18 +389,21 @@ function render() {
       <td class="num">${cant(p.vendidos)}</td>
       <td class="num">${money(p.ingresos)}</td>
       <td class="num ${p.ganancia < -0.5 ? "loss" : p.ganancia > 0.5 ? "gain" : ""}"><strong>${money(p.ganancia)}</strong></td>
-      <td class="num">${p.ingresos > 0 ? pct(p.ganancia / p.ingresos) : "—"}</td></tr>`).join("")}</tbody></table>`
+      <td class="num">${p.ingresos > 0 ? pct(p.ganancia / p.ingresos) : "—"}</td>
+      <td><button class="btn link" type="button" data-prod="${esc(p.clave)}">Editar</button></td></tr>`).join("")}</tbody></table>`
       : `<div class="empty">Ningún producto coincide con «${esc(filtro)}».</div>`;
   } else {
     const fs = r.filas.filter(f => clave(f.producto).includes(q));
     tabla.innerHTML = fs.length ? `<table><thead><tr><th>Fecha</th><th class="l">Tipo</th><th class="l">Producto</th><th>Cant.</th><th>Precio unit.</th><th>Total</th><th>Costo unit.</th><th>Ganancia</th><th></th></tr></thead><tbody>${fs.map(f => `<tr>
       <td class="num">${fechaTxt(f.fecha)}</td>
-      <td class="l"><span class="pill ${f.tipo}">${f.tipo === "compra" ? "Compra" : "Venta"}</span></td>
+      <td class="l"><span class="pill ${f.tipo}">${{ compra: "Compra", venta: "Venta", ajuste: "Ajuste" }[f.tipo]}</span></td>
       <td class="name l">${esc(f.producto)}${f.nota ? `<div class="muted" style="font-weight:400;font-size:.84rem">${esc(f.nota)}</div>` : ""}</td>
-      <td class="num">${cant(f.cantidad)}</td><td class="num">${money(f.precio)}</td><td class="num">${money(f.total)}</td>
-      <td class="num muted">${f.tipo === "venta" ? money(f.costoUnit) : ""}</td>
+      ${f.tipo === "ajuste" ? `<td class="num">${f.cantidad ? (f.cantidad > 0 ? "+" : "−") + cant(Math.abs(f.cantidad)) : "—"}</td><td></td><td></td>`
+        : `<td class="num">${cant(f.cantidad)}</td><td class="num">${money(f.precio)}</td><td class="num">${money(f.total)}</td>`}
+      <td class="num muted">${f.tipo === "venta" ? money(f.costoUnit) : f.tipo === "ajuste" ? money(f.precio) : ""}</td>
       <td class="num ${f.tipo === "venta" ? (f.ganancia < -0.5 ? "loss" : "gain") : ""}">${f.tipo === "venta" ? `<strong>${money(f.ganancia)}</strong>${f.faltaStock ? ` <span class="pill low" title="Se vendió más de lo que había en stock">sin stock</span>` : ""}` : ""}</td>
-      <td><button class="btn link" type="button" data-editar="${esc(f.id)}">Editar</button></td></tr>`).join("")}</tbody></table>`
+      <td>${f.tipo === "ajuste" ? `<button class="btn link danger" type="button" data-borrar="${esc(f.id)}">Borrar</button>`
+        : `<button class="btn link" type="button" data-editar="${esc(f.id)}">Editar</button>`}</td></tr>`).join("")}</tbody></table>`
       : `<div class="empty">No hay movimientos ${q ? "que coincidan" : PER_TXT[periodo]}.</div>`;
   }
 
@@ -457,6 +482,46 @@ async function escribir(fn, ok) {
   } finally { b.disabled = false; }
 }
 let tt; function toast(msg) { const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(tt); tt = setTimeout(() => t.hidden = true, 2600); }
+
+/* ---------- Editar un producto desde el inventario ---------- */
+const dlgp = $("#dlgp"), r2 = n => Math.round(n * 100) / 100;
+let prodEdit = null, confirmaBorrarP = false;
+function abrirProd(k) {
+  const p = calcular(movs, () => true).porClave.get(k); if (!p) return;
+  prodEdit = { ...p, stock0: r2(p.stock), costo0: r2(p.stock > 0 ? p.valor / p.stock : p.ultimoCosto) }; confirmaBorrarP = false;
+  $("#pp-nombre").value = p.nombre; $("#pp-stock").value = prodEdit.stock0; $("#pp-costo").value = prodEdit.costo0;
+  $("#pp-borrar").textContent = "Borrar producto"; $("#pp-err").hidden = true; dlgp.showModal();
+}
+async function guardarProd(fn, ok) {
+  const b = $("#pp-guardar"), e = $("#pp-err"); b.disabled = true; e.hidden = true;
+  try { await fn(); dlgp.close(); toast(ok); }
+  catch (err) { e.textContent = err && err.code === "invalid_argument" ? "No tienes permiso para cambiar los datos de esta página." : "No se pudo guardar todo. Revisa tu conexión e inténtalo otra vez."; e.hidden = false; }
+  finally { b.disabled = false; }
+}
+$("#formp").addEventListener("submit", ev => {
+  ev.preventDefault();
+  const e = $("#pp-err"), mal = msg => { e.textContent = msg; e.hidden = false; };
+  const nombre = $("#pp-nombre").value.replace(/\s+/g, " ").trim(), stock = Number($("#pp-stock").value), costo = Number($("#pp-costo").value);
+  if (!nombre) return mal("Escribe el nombre del producto.");
+  if ($("#pp-stock").value === "" || !(stock >= 0)) return mal("El stock debe ser cero o más.");
+  if ($("#pp-costo").value === "" || !(costo >= 0)) return mal("Escribe el costo por unidad.");
+  if (clave(nombre) !== prodEdit.clave && calcular(movs, () => true).porClave.has(clave(nombre))) return mal("Ya tienes otro producto con ese nombre.");
+  const suyos = movs.filter(m => clave(m.producto) === prodEdit.clave);
+  const cambiaNombre = nombre !== prodEdit.nombre || suyos.some(m => m.producto !== nombre);
+  const cambiaStock = stock !== prodEdit.stock0 || costo !== prodEdit.costo0;
+  if (!cambiaNombre && !cambiaStock) return dlgp.close();
+  guardarProd(async () => {
+    if (cambiaNombre) for (const m of suyos) if (m.producto !== nombre) await store.guardar(m.id, { ...cuerpo(m), producto: nombre });
+    if (cambiaStock) await store.guardar(null, { tipo: "ajuste", producto: nombre, cantidad: stock === prodEdit.stock0 ? 0 : stock - prodEdit.stock,
+      precio: costo, fecha: hoy(), nota: "Ajuste de inventario", creado: Date.now(), ejemplo: false });
+  }, "Producto actualizado");
+});
+$("#pp-cancelar").addEventListener("click", () => dlgp.close());
+$("#pp-borrar").addEventListener("click", () => {
+  const ids = movs.filter(m => clave(m.producto) === prodEdit.clave).map(m => m.id);
+  if (!confirmaBorrarP) { confirmaBorrarP = true; $("#pp-borrar").textContent = `Sí, borrar con sus ${ids.length} movimientos`; return; }
+  guardarProd(() => store.borrar(ids), "Producto borrado");
+});
 
 /* ---------- Compra desde una foto (Claude lee la boleta o factura) ---------- */
 const dlgf = $("#dlgf"), pfItems = $("#pf-items");
@@ -592,8 +657,13 @@ $("#vista").addEventListener("click", e => { const v = e.target.dataset.v; if (!
 $("#buscar").addEventListener("input", e => { filtro = e.target.value; render(); });
 $("#tabla").addEventListener("click", e => {
   if (e.target.id === "btn-ejemplo") return cargarEjemplos();
-  const id = e.target.dataset.editar, m = id && movs.find(x => x.id === id);
-  if (m) abrir(m.tipo, m);
+  const d = e.target.dataset, m = d.editar && movs.find(x => x.id === d.editar);
+  if (m) return abrir(m.tipo, m);
+  if (d.prod) return abrirProd(d.prod);
+  if (d.borrar) {
+    if (e.target.textContent === "Borrar") { e.target.textContent = "¿Seguro? Borrar"; return; }
+    escribir(() => store.borrar([d.borrar]), "Ajuste borrado");
+  }
 });
 $("#btn-borrar-ej").addEventListener("click", () => escribir(() => store.borrar(movs.filter(m => m.ejemplo).map(m => m.id)), "Ejemplos borrados"));
 
