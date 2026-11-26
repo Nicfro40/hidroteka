@@ -229,6 +229,7 @@ form { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
       <label class="field"><span>Stock actual</span><input id="pp-stock" type="number" inputmode="decimal" min="0" step="any"></label>
       <label class="field"><span>Costo promedio (unidad)</span><input id="pp-costo" type="number" inputmode="decimal" min="0" step="any"></label>
     </div>
+    <label class="field"><span>Precio de venta (unidad, opcional)</span><input id="pp-precio" type="number" inputmode="decimal" min="0" step="any" placeholder="A cuánto lo vendes"></label>
     <div class="hint">Si cambias el stock o el costo, se anota un ajuste con la fecha de hoy en Movimientos. La ganancia de las ventas anteriores no cambia.</div>
     <div class="err" id="pp-err" role="alert" hidden></div>
     <div class="form-actions">
@@ -311,7 +312,9 @@ function calcular(movs, enPeriodo) {
 
 /* ---------- Almacenamiento: base del artefacto o este navegador ---------- */
 const LS = "inventario.movimientos.v1";
-let movs = [], cargado = false, store = null, modo = "";
+let movs = [], precios = {}, cargado = false, store = null, modo = "";
+const LSP = "inventario.precios.v1";
+const limpiarP = o => { const r = {}; if (o && typeof o === "object") for (const [k, v] of Object.entries(o)) if (k.length <= 120 && Number(v) > 0) r[k] = Number(v); return r; };
 const limpiar = (id, d) => {
   if (!d || !(d.tipo in ORDEN)) return null;
   const cantidad = Number(d.cantidad), precio = Number(d.precio);
@@ -326,8 +329,10 @@ function storeLocal() {
   const leer = () => { try { return JSON.parse(localStorage.getItem(LS) || "[]"); } catch { return []; } };
   const escribir = () => { try { localStorage.setItem(LS, JSON.stringify(movs.map(m => ({ id: m.id, ...cuerpo(m) })))); } catch { toast("No se pudo guardar en este navegador."); } };
   movs = leer().map(d => limpiar(String(d.id), d)).filter(Boolean);
+  try { precios = limpiarP(JSON.parse(localStorage.getItem(LSP) || "{}")); } catch {}
   cargado = true;
   return {
+    async guardarPrecios(o) { precios = limpiarP(o); try { localStorage.setItem(LSP, JSON.stringify(precios)); } catch {} render(); },
     async guardar(id, m) { id = id || "m" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
       movs = movs.filter(x => x.id !== id).concat({ id, ...m }); escribir(); render(); },
     async borrar(ids) { movs = movs.filter(x => !ids.includes(x.id)); escribir(); render(); },
@@ -341,7 +346,10 @@ function storeDb(db) {
     if (!snap.metadata.fromCache) clearTimeout(aviso);
     cargado = true; render();
   }, () => { clearTimeout(aviso); cargado = true; $("#estado").textContent = "No se pudieron cargar tus datos. Vuelve a abrir la página más tarde."; render(); });
+  const dp = db.doc("ajustes/precios");
+  dp.onSnapshot(sn => { precios = limpiarP(sn.exists ? sn.data().precios : null); render(); }, () => {});
   return {
+    async guardarPrecios(o) { await dp.set({ precios: limpiarP(o) }); },
     async guardar(id, m) { await (id ? col.doc(id) : col.doc()).set(m); },
     async borrar(ids) { for (const id of ids) await col.doc(id).delete(); },
   };
@@ -357,6 +365,13 @@ const enPeriodo = () => {
 };
 const PER_TXT = { mes: "este mes", mesant: "el mes pasado", anio: "este año", todo: "en total" };
 
+const costoDe = p => p.stock > 0 ? p.valor / p.stock : p.ultimoCosto;
+function precioCelda(p) {
+  const pv = precios[p.clave]; if (!pv) return `<span class="muted">—</span>`;
+  const g = pv - costoDe(p);
+  return `${money(pv)}<div class="${g < -0.5 ? "loss" : "muted"}" style="font-size:.8rem">${g < -0.5 ? "pierdes" : "ganas"} ${money(Math.abs(g))} c/u</div>`;
+}
+const CONSEJO = "El costo de cada venta se calcula con el costo promedio de lo que tenías en stock ese día.";
 function render() {
   document.querySelectorAll("#periodo button").forEach(b => b.setAttribute("aria-pressed", b.dataset.p === periodo));
   document.querySelectorAll("#vista button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === vista));
@@ -381,10 +396,11 @@ function render() {
     <button class="btn" id="btn-ejemplo" type="button">Ver cómo se ve con datos de ejemplo</button></div>`;
   else if (vista === "inv") {
     const ps = r.prods.filter(p => p.clave.includes(q)).sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
-    tabla.innerHTML = ps.length ? `<table><thead><tr><th>Producto</th><th>Stock</th><th>Costo prom.</th><th>Valor en stock</th><th>Vendidos</th><th>Vendiste</th><th>Ganancia</th><th>Margen</th><th></th></tr></thead><tbody>${ps.map(p => `<tr>
+    tabla.innerHTML = ps.length ? `<table><thead><tr><th>Producto</th><th>Stock</th><th>Costo prom.</th><th>Precio venta</th><th>Valor en stock</th><th>Vendidos</th><th>Vendiste</th><th>Ganancia</th><th>Margen</th><th></th></tr></thead><tbody>${ps.map(p => `<tr>
       <td class="name">${esc(p.nombre)} ${p.stock === 0 ? `<span class="pill out">Agotado</span>` : p.stock <= 2 ? `<span class="pill low">Queda poco</span>` : ""}</td>
       <td class="num">${cant(p.stock)}</td>
       <td class="num">${p.stock > 0 ? money(p.valor / p.stock) : `<span class="muted">${money(p.ultimoCosto)}</span>`}</td>
+      <td class="num">${precioCelda(p)}</td>
       <td class="num">${money(p.valor)}</td>
       <td class="num">${cant(p.vendidos)}</td>
       <td class="num">${money(p.ingresos)}</td>
@@ -412,6 +428,8 @@ function render() {
   $("#rank").innerHTML = top.length ? top.map(p => `<li><div class="row"><span>${esc(p.nombre)}</span><strong class="num ${p.ganancia < -0.5 ? "loss" : ""}">${money(p.ganancia)}</strong></div>
     <div class="track"><div class="fill ${p.ganancia < 0 ? "neg" : ""}" style="width:${Math.max(2, Math.abs(p.ganancia) / max * 100).toFixed(1)}%"></div></div></li>`).join("")
     : `<li class="muted">Aquí aparecerán tus productos ordenados por ganancia cuando registres ventas.</li>`;
+  const conPrecio = r.prods.filter(p => precios[p.clave] && p.stock > 0);
+  $("#consejo").textContent = (conPrecio.length ? `Si vendes todo el stock que tiene precio de venta, ganarías ${money(conPrecio.reduce((s, p) => s + precios[p.clave] * p.stock - p.valor, 0))}. ` : "") + CONSEJO;
   $("#lista-prod").innerHTML = r.prods.map(p => `<option value="${esc(p.nombre)}"></option>`).join("");
 }
 
@@ -448,7 +466,11 @@ function pista() {
 }
 function error(msg) { const e = $("#f-err"); e.textContent = msg; e.hidden = false; }
 
-$("#form").addEventListener("input", pista);
+$("#form").addEventListener("input", () => {
+  const pv = precios[clave(F.producto.value)];
+  if (pv && !editando && tipoSel() === "venta" && F.precio.value === "") F.precio.value = pv;
+  pista();
+});
 $("#form").addEventListener("submit", async ev => {
   ev.preventDefault();
   const tipo = tipoSel(), producto = F.producto.value.trim().replace(/\s+/g, " ");
@@ -490,6 +512,7 @@ function abrirProd(k) {
   const p = calcular(movs, () => true).porClave.get(k); if (!p) return;
   prodEdit = { ...p, stock0: r2(p.stock), costo0: r2(p.stock > 0 ? p.valor / p.stock : p.ultimoCosto) }; confirmaBorrarP = false;
   $("#pp-nombre").value = p.nombre; $("#pp-stock").value = prodEdit.stock0; $("#pp-costo").value = prodEdit.costo0;
+  $("#pp-precio").value = precios[k] || "";
   $("#pp-borrar").textContent = "Borrar producto"; $("#pp-err").hidden = true; dlgp.showModal();
 }
 async function guardarProd(fn, ok) {
@@ -509,18 +532,23 @@ $("#formp").addEventListener("submit", ev => {
   const suyos = movs.filter(m => clave(m.producto) === prodEdit.clave);
   const cambiaNombre = nombre !== prodEdit.nombre || suyos.some(m => m.producto !== nombre);
   const cambiaStock = stock !== prodEdit.stock0 || costo !== prodEdit.costo0;
-  if (!cambiaNombre && !cambiaStock) return dlgp.close();
+  const pv = Number($("#pp-precio").value) || 0, k2 = clave(nombre);
+  if (!(pv >= 0)) return mal("El precio de venta no puede ser negativo.");
+  const cambiaPrecio = pv !== (precios[prodEdit.clave] || 0) || (k2 !== prodEdit.clave && !!precios[prodEdit.clave]);
+  if (!cambiaNombre && !cambiaStock && !cambiaPrecio) return dlgp.close();
   guardarProd(async () => {
     if (cambiaNombre) for (const m of suyos) if (m.producto !== nombre) await store.guardar(m.id, { ...cuerpo(m), producto: nombre });
     if (cambiaStock) await store.guardar(null, { tipo: "ajuste", producto: nombre, cantidad: stock === prodEdit.stock0 ? 0 : stock - prodEdit.stock,
       precio: costo, fecha: hoy(), nota: "Ajuste de inventario", creado: Date.now(), ejemplo: false });
+    if (cambiaPrecio) { const o = { ...precios }; delete o[prodEdit.clave]; if (pv > 0) o[k2] = pv; await store.guardarPrecios(o); }
   }, "Producto actualizado");
 });
 $("#pp-cancelar").addEventListener("click", () => dlgp.close());
 $("#pp-borrar").addEventListener("click", () => {
   const ids = movs.filter(m => clave(m.producto) === prodEdit.clave).map(m => m.id);
   if (!confirmaBorrarP) { confirmaBorrarP = true; $("#pp-borrar").textContent = `Sí, borrar con sus ${ids.length} movimientos`; return; }
-  guardarProd(() => store.borrar(ids), "Producto borrado");
+  guardarProd(async () => { await store.borrar(ids);
+    if (precios[prodEdit.clave]) { const o = { ...precios }; delete o[prodEdit.clave]; await store.guardarPrecios(o); } }, "Producto borrado");
 });
 
 /* ---------- Compra desde una foto (Claude lee la boleta o factura) ---------- */
